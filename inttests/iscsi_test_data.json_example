@@ -1,0 +1,21 @@
+{
+  "params": {
+    "chroot": "/noderoot"
+  },
+  "volumes": [
+    {
+      "targets": [
+        {
+          "target": "iqn.2015-10.com.dell:dellemc-fnm00180603450-a-67df3eb2",
+          "portal": "1.1.1.1"
+        },
+        {
+          "target": "iqn.2015-10.com.dell:dellemc-fnm00180603450-b-46e07fd1",
+          "portal": "1.1.1.1"
+        }
+      ],
+      "luns" : "1,2,3,4-10"
+    }
+  ]
+}
+

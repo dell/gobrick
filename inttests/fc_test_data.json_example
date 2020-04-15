@@ -1,0 +1,35 @@
+{
+  "params": {
+    "chroot": "/noderoot"
+  },
+  "volumes": [
+    {
+      "targets": [
+        {
+          "WWPN": "58ccf09848a003a3"
+        },
+        {
+          "WWPN": "58ccf09948a003a3"
+        },
+        {
+          "WWPN": "58ccf09048a003a3"
+        },
+        {
+          "WWPN": "58ccf09148a003a3"
+        }
+      ],
+      "luns": "2,10,12"
+    },
+    {
+      "targets": [
+        {
+          "WWPN": "58ccf09848a003b3"
+        },
+        {
+          "WWPN": "58ccf09948a003b3"
+        }
+      ],
+      "luns": "10-30"
+    }
+  ]
+}

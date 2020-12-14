@@ -20,6 +20,8 @@ package gobrick
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/dell/gobrick/internal/logger"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
@@ -27,8 +29,6 @@ import (
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/dell/gobrick/pkg/multipath"
 	"github.com/dell/gobrick/pkg/scsi"
-	"errors"
-	"fmt"
 	"github.com/dell/goiscsi"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sync/singleflight"
@@ -52,6 +52,11 @@ type ISCSIConnectorParams struct {
 	// iscsiLib command will run from this chroot
 	Chroot string
 
+	// chap
+	ChapUser     string
+	ChapPassword string
+	ChapEnabled  bool
+
 	// timeouts
 	// how long to wait for iSCSI session to become active after login
 	WaitDeviceTimeout                      time.Duration
@@ -73,6 +78,9 @@ func NewISCSIConnector(params ISCSIConnectorParams) *ISCSIConnector {
 		baseConnector: newBaseConnector(mp, s,
 			baseConnectorParams{
 				MultipathFlushTimeout: params.MultipathFlushTimeout}),
+		chapPassword: params.ChapPassword,
+		chapUser: params.ChapUser,
+		chapEnabled: params.ChapEnabled,
 	}
 
 	iSCSIOpts := make(map[string]string)
@@ -119,8 +127,13 @@ type ISCSIConnector struct {
 	limiter    *semaphore.Weighted
 	singleCall *singleflight.Group
 
-	//wrappers
+	// wrappers
 	filePath wrp.LimitedFilepath
+
+	// chap
+	chapUser     string
+	chapPassword string
+	chapEnabled  bool
 }
 
 type ISCSITargetInfo struct {
@@ -537,6 +550,11 @@ func (c *ISCSIConnector) checkISCSISessions(
 			"update iSCSI node for %s %s", t.Portal, t.Target)
 		opt := make(map[string]string)
 		opt["node.session.initial_login_retry_max"] = "1"
+		if c.chapEnabled {
+			opt["node.session.auth.authmethod"] = "CHAP"
+			opt["node.session.auth.username"] = c.chapUser
+			opt["node.session.auth.password"] = c.chapPassword
+		}
 		err := c.iscsiLib.CreateOrUpdateNode(tgt, opt)
 		if err != nil {
 			logger.Error(ctx,
@@ -624,6 +642,11 @@ func (c *ISCSIConnector) tryEnableManualISCSISessionMGMT(ctx context.Context, ta
 	if c.manualSessionManagement {
 		opt := make(map[string]string)
 		opt["node.session.scan"] = "manual"
+		if c.chapEnabled {
+			opt["node.session.auth.authmethod"] = "CHAP"
+			opt["node.session.auth.username"] = c.chapUser
+			opt["node.session.auth.password"] = c.chapPassword
+		}
 		err := c.iscsiLib.CreateOrUpdateNode(tgt, opt)
 		if err != nil {
 			var expectedErr bool

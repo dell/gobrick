@@ -20,24 +20,29 @@ package gobrick
 
 import (
 	"context"
-	"github.com/dell/gobrick/internal/logger"
-	intmultipath "github.com/dell/gobrick/internal/multipath"
-	intscsi "github.com/dell/gobrick/internal/scsi"
-	"github.com/dell/gobrick/internal/tracer"
 	"errors"
 	"fmt"
 	"path"
 	"strings"
 	"time"
+
+	"github.com/dell/gobrick/internal/logger"
+	intmultipath "github.com/dell/gobrick/internal/multipath"
+	intscsi "github.com/dell/gobrick/internal/scsi"
+	"github.com/dell/gobrick/internal/tracer"
 )
 
 const (
-	multipathFlushTimeoutDefault = time.Second * 120
-	deviceMapperPrefix           = "dm-"
+	multipathFlushTimeoutDefault      = time.Second * 120
+	multipathFlushRetriesDefault      = 10
+	multipathFlushRetryTimeoutDefault = time.Second * 5
+	deviceMapperPrefix                = "dm-"
 )
 
 type baseConnectorParams struct {
-	MultipathFlushTimeout time.Duration
+	MultipathFlushRetries      int
+	MultipathFlushTimeout      time.Duration
+	MultipathFlushRetryTimeout time.Duration
 }
 
 func newBaseConnector(mp intmultipath.Multipath, s intscsi.SCSI, params baseConnectorParams) *baseConnector {
@@ -45,8 +50,16 @@ func newBaseConnector(mp intmultipath.Multipath, s intscsi.SCSI, params baseConn
 		multipath: mp,
 		scsi:      s,
 	}
+
+	if params.MultipathFlushRetries == 0 {
+		conn.multipathFlushRetries = multipathFlushRetriesDefault
+	} else {
+		conn.multipathFlushRetries = params.MultipathFlushRetries
+	}
 	setTimeouts(&conn.multipathFlushTimeout,
 		params.MultipathFlushTimeout, multipathFlushTimeoutDefault)
+	setTimeouts(&conn.multipathFlushRetryTimeout,
+		params.MultipathFlushRetryTimeout, multipathFlushRetryTimeoutDefault)
 
 	return conn
 }
@@ -55,7 +68,9 @@ type baseConnector struct {
 	multipath intmultipath.Multipath
 	scsi      intscsi.SCSI
 
-	multipathFlushTimeout time.Duration
+	multipathFlushRetries      int
+	multipathFlushTimeout      time.Duration
+	multipathFlushRetryTimeout time.Duration
 }
 
 func (bc *baseConnector) disconnectDevicesByDeviceName(ctx context.Context, name string) error {
@@ -120,11 +135,27 @@ func (bc *baseConnector) cleanMultipathDevice(ctx context.Context, dm string) er
 	defer tracer.TraceFuncCall(ctx, "baseConnector.cleanMultipathDevice")()
 	ctx, cancelFunc := context.WithTimeout(ctx, bc.multipathFlushTimeout)
 	defer cancelFunc()
-	err := bc.multipath.FlushDevice(ctx, path.Join("/dev/", dm))
-	if err != nil {
-		return err
+
+	for i := 0; i < bc.multipathFlushRetries; i++ {
+		logger.Info(ctx, "trying to flush multipath device with retries: retry %d", i)
+		err := bc.retryFlushMultipathDevice(ctx, dm)
+		if err == nil {
+			return nil
+		}
 	}
-	return nil
+
+	return fmt.Errorf("can't flush multipath device, timed out after multiple attempts")
+}
+
+func (bc *baseConnector) retryFlushMultipathDevice(ctx context.Context, dm string) error {
+	smallCtx, cancel := context.WithTimeout(ctx, bc.multipathFlushRetryTimeout)
+	defer cancel()
+	err := bc.multipath.FlushDevice(smallCtx, path.Join("/dev/", dm))
+	if !bc.scsi.IsDeviceExist(ctx, dm) {
+		logger.Info(ctx, "device %s no longer exists", dm)
+		return nil
+	}
+	return err
 }
 
 func (bc *baseConnector) getDMWWN(ctx context.Context, dm string) (string, error) {

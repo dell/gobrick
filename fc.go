@@ -20,6 +20,14 @@ package gobrick
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"math"
+	"path"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/dell/gobrick/internal/logger"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
@@ -27,14 +35,7 @@ import (
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/dell/gobrick/pkg/multipath"
 	"github.com/dell/gobrick/pkg/scsi"
-	"errors"
-	"fmt"
 	"golang.org/x/sync/semaphore"
-	"math"
-	"path"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const (
@@ -51,6 +52,10 @@ type FCConnectorParams struct {
 	WaitDeviceRegisterTimeout time.Duration
 	// timeout for multipath flush command
 	MultipathFlushTimeout time.Duration
+	// timeout for each multipath flush retry
+	MultipathFlushRetryTimeout time.Duration
+	// how many retries for multipath flush
+	MultipathFlushRetries int
 
 	// how many parallel operations allowed
 	MaxParallelOperations int
@@ -69,7 +74,9 @@ func NewFCConnector(params FCConnectorParams) *FCConnector {
 		ioutil:    &wrp.IOUTILWrapper{},
 		baseConnector: newBaseConnector(mp, s,
 			baseConnectorParams{
-				MultipathFlushTimeout: params.MultipathFlushTimeout}),
+				MultipathFlushTimeout:      params.MultipathFlushTimeout,
+				MultipathFlushRetryTimeout: params.MultipathFlushRetryTimeout,
+				MultipathFlushRetries:      params.MultipathFlushRetries}),
 	}
 
 	setTimeouts(&conn.waitDeviceRegisterTimeout, params.WaitDeviceRegisterTimeout,

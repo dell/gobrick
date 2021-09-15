@@ -22,6 +22,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"os/exec"
+	"path"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/dell/gobrick/internal/logger"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
@@ -32,13 +40,6 @@ import (
 	"github.com/dell/goiscsi"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sync/singleflight"
-	"math"
-	"os/exec"
-	"path"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 const (
@@ -63,7 +64,9 @@ type ISCSIConnectorParams struct {
 	WaitDeviceRegisterTimeout              time.Duration
 	FailedSessionMinimumLoginRetryInterval time.Duration
 	MultipathFlushTimeout                  time.Duration
+	MultipathFlushRetryTimeout             time.Duration
 
+	MultipathFlushRetries int
 	MaxParallelOperations int
 }
 
@@ -77,10 +80,12 @@ func NewISCSIConnector(params ISCSIConnectorParams) *ISCSIConnector {
 		filePath:  &wrp.FilepathWrapper{},
 		baseConnector: newBaseConnector(mp, s,
 			baseConnectorParams{
-				MultipathFlushTimeout: params.MultipathFlushTimeout}),
+				MultipathFlushTimeout:      params.MultipathFlushTimeout,
+				MultipathFlushRetryTimeout: params.MultipathFlushRetryTimeout,
+				MultipathFlushRetries:      params.MultipathFlushRetries}),
 		chapPassword: params.ChapPassword,
-		chapUser: params.ChapUser,
-		chapEnabled: params.ChapEnabled,
+		chapUser:     params.ChapUser,
+		chapEnabled:  params.ChapEnabled,
 	}
 
 	iSCSIOpts := make(map[string]string)

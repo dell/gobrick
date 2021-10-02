@@ -44,6 +44,7 @@ const (
 
 func NewSCSI(chroot string) *scsi {
 	scsi := &scsi{
+		chroot: chroot,
 		fileReader: &wrp.IOUTILWrapper{},
 		filePath:   &wrp.FilepathWrapper{},
 		os:         &wrp.OSWrapper{},

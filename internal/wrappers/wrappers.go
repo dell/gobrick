@@ -52,6 +52,13 @@ type ISCSILib interface {
 	CreateOrUpdateNode(target goiscsi.ISCSITarget, options map[string]string) error
 }
 
+type NVMeTCP interface {
+	DiscoverNVMeTCPTargets(address string, login bool) ([]NVMeTarget, error)
+	GetInitiators(filename string) ([]string, error)
+	NVMeConnect(target NVMeTarget) error
+	NVMeDisonnect(target NVMeTarget) error
+}
+
 // wrappers
 
 type OSExecWrapper struct{}

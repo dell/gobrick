@@ -4,11 +4,12 @@ package wrappers
 
 import (
 	"context"
-	"github.com/dell/goiscsi"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/dell/goiscsi"
 )
 
 type LimitedFileInfo interface {
@@ -79,7 +80,7 @@ func (io *FilepathWrapper) EvalSymlinks(path string) (string, error) {
 type OSWrapper struct{}
 
 func (io *OSWrapper) OpenFile(name string, flag int, perm os.FileMode) (LimitedFile, error) {
-	return os.OpenFile(name, flag, perm)
+	return os.OpenFile(filepath.Clean(name), flag, perm) // #nosec G304
 }
 
 func (io *OSWrapper) Stat(name string) (LimitedFileInfo, error) {

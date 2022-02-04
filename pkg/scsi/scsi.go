@@ -22,11 +22,11 @@ package scsi
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
-	"errors"
-	"fmt"
 	"golang.org/x/sync/singleflight"
 	"os"
 	"path"

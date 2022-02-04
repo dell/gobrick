@@ -20,9 +20,9 @@ package scsi
 
 import (
 	"context"
+	"fmt"
 	mh "github.com/dell/gobrick/internal/mockhelper"
 	wrp "github.com/dell/gobrick/internal/wrappers"
-	"fmt"
 	"github.com/golang/mock/gomock"
 	"golang.org/x/sync/singleflight"
 	"reflect"

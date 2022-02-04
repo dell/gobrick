@@ -20,9 +20,9 @@ package inttests
 
 import (
 	"context"
+	"fmt"
 	"github.com/dell/gobrick"
 	"github.com/dell/gobrick/pkg/multipath"
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"sync"

@@ -1,8 +1,8 @@
 package mockhelper
 
 import (
-	wrp "github.com/dell/gobrick/internal/wrappers"
 	"errors"
+	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/dell/goiscsi"
 	"github.com/golang/mock/gomock"
 	"os"

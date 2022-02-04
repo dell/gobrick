@@ -22,11 +22,11 @@ package multipath
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
-	"errors"
-	"fmt"
 	"strings"
 )
 

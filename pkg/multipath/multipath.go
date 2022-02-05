@@ -24,10 +24,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
-	"strings"
 )
 
 const (
@@ -35,6 +36,7 @@ const (
 	multipathDaemon = "multipathd"
 )
 
+// NewMultipath initializes multipath struct
 func NewMultipath(chroot string) *multipath {
 	mp := &multipath{
 		chroot:   chroot,

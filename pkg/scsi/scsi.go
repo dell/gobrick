@@ -24,15 +24,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dell/gobrick/internal/logger"
-	"github.com/dell/gobrick/internal/tracer"
-	wrp "github.com/dell/gobrick/internal/wrappers"
-	"golang.org/x/sync/singleflight"
 	"os"
 	"path"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/dell/gobrick/internal/logger"
+	"github.com/dell/gobrick/internal/tracer"
+	wrp "github.com/dell/gobrick/internal/wrappers"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -42,6 +43,7 @@ const (
 	scsiIDPath       = "/lib/udev/scsi_id"
 )
 
+// NewSCSI initializes scsi struct
 func NewSCSI(chroot string) *scsi {
 	scsi := &scsi{
 		fileReader: &wrp.IOUTILWrapper{},
@@ -54,6 +56,7 @@ func NewSCSI(chroot string) *scsi {
 	return scsi
 }
 
+// HCTL defines host, channel, target, lun info
 type HCTL struct {
 	Host    string
 	Channel string
@@ -61,6 +64,7 @@ type HCTL struct {
 	Lun     string
 }
 
+// IsFullInfo validates HCTL struct
 func (h *HCTL) IsFullInfo() bool {
 	if h.Channel == "" || h.Channel == "-" ||
 		h.Target == "" || h.Target == "-" {
@@ -69,12 +73,14 @@ func (h *HCTL) IsFullInfo() bool {
 	return true
 }
 
+// DevicesHaveDifferentParentsErr defines a custom error
 type DevicesHaveDifferentParentsErr struct{}
 
 func (dperr *DevicesHaveDifferentParentsErr) Error() string {
 	return "device have different parent DMs"
 }
 
+// scsi defines scsi info
 type scsi struct {
 	chroot string
 

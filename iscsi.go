@@ -49,6 +49,7 @@ const (
 	iSCSIMaxParallelOperationsDefault           = 5
 )
 
+// ISCSIConnectorParams defines ISCSI connector parameters
 type ISCSIConnectorParams struct {
 	// iscsiLib command will run from this chroot
 	Chroot string
@@ -70,6 +71,7 @@ type ISCSIConnectorParams struct {
 	MaxParallelOperations int
 }
 
+// NewISCSIConnector creates an ISCSI client and returns it
 func NewISCSIConnector(params ISCSIConnectorParams) *ISCSIConnector {
 	mp := multipath.NewMultipath(params.Chroot)
 	s := scsi.NewSCSI(params.Chroot)
@@ -115,6 +117,7 @@ func NewISCSIConnector(params ISCSIConnectorParams) *ISCSIConnector {
 	return conn
 }
 
+// ISCSIConnector defines iscsi connector info
 type ISCSIConnector struct {
 	baseConnector *baseConnector
 	multipath     intmultipath.Multipath
@@ -141,11 +144,13 @@ type ISCSIConnector struct {
 	chapEnabled  bool
 }
 
+// ISCSITargetInfo defines iscsi target info
 type ISCSITargetInfo struct {
 	Portal string
 	Target string
 }
 
+// ISCSIVolumeInfo defines iscsi volume info
 type ISCSIVolumeInfo struct {
 	Targets []ISCSITargetInfo
 	Lun     int
@@ -160,6 +165,7 @@ func singleCallKeyForISCSITargets(info ISCSIVolumeInfo) string {
 	return strings.Join(data, ",")
 }
 
+// ConnectVolume connects to the iscsi volume and returns device info
 func (c *ISCSIConnector) ConnectVolume(ctx context.Context, info ISCSIVolumeInfo) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.ConnectVolume")()
 	if err := c.limiter.Acquire(ctx, 1); err != nil {
@@ -206,6 +212,7 @@ func (c *ISCSIConnector) ConnectVolume(ctx context.Context, info ISCSIVolumeInfo
 	return Device{}, err
 }
 
+// DisconnectVolume disconnects from iscsi volume
 func (c *ISCSIConnector) DisconnectVolume(ctx context.Context, info ISCSIVolumeInfo) error {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.DisconnectVolume")()
 	if err := c.limiter.Acquire(ctx, 1); err != nil {
@@ -216,6 +223,7 @@ func (c *ISCSIConnector) DisconnectVolume(ctx context.Context, info ISCSIVolumeI
 	return c.cleanConnection(ctx, false, info)
 }
 
+// DisconnectVolumeByDeviceName disconnects from volume specified by WWN name
 func (c *ISCSIConnector) DisconnectVolumeByDeviceName(ctx context.Context, name string) error {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.DisconnectVolumeByDeviceName")()
 	if err := c.limiter.Acquire(ctx, 1); err != nil {
@@ -225,6 +233,7 @@ func (c *ISCSIConnector) DisconnectVolumeByDeviceName(ctx context.Context, name 
 	return c.baseConnector.disconnectDevicesByDeviceName(ctx, name)
 }
 
+// GetInitiatorName gets iscsi initiators and returns it
 func (c *ISCSIConnector) GetInitiatorName(ctx context.Context) ([]string, error) {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.GetInitiatorName")()
 	logger.Info(ctx, "get initiator name")

@@ -119,7 +119,7 @@ func Test_scsi_IsDeviceExist(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
@@ -206,7 +206,7 @@ func Test_scsi_RescanSCSIHostByHCTL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
@@ -303,7 +303,7 @@ func Test_scsi_RescanSCSIDeviceByHCTL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
@@ -416,7 +416,7 @@ func Test_scsi_DeleteSCSIDeviceByHCTL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
@@ -456,7 +456,7 @@ func Test_scsi_DeleteSCSIDeviceByName(t *testing.T) {
 	tests := getDeleteSCSIDeviceTestCases(mock, defaultArgs, ctrl)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
@@ -495,7 +495,7 @@ func Test_scsi_DeleteSCSIDeviceByPath(t *testing.T) {
 	tests := getDeleteSCSIDeviceTestCases(mock, defaultArgs, ctrl)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
@@ -593,7 +593,7 @@ func Test_scsi_GetDeviceWWN(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				chroot:     tt.fields.chroot,
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
@@ -697,7 +697,7 @@ func Test_scsi_GetDevicesByWWN(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
@@ -819,7 +819,7 @@ func Test_scsi_GetDMDeviceByChildren(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
@@ -916,7 +916,7 @@ func Test_scsi_CheckDeviceIs_Valid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
@@ -1006,7 +1006,7 @@ func Test_scsi_GetDeviceNameByHCTL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
@@ -1091,7 +1091,7 @@ func Test_scsi_GetDMChildren(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
@@ -1184,7 +1184,7 @@ func Test_scsi_WaitUdevSymlink(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &scsi{
+			s := &Scsi{
 				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,

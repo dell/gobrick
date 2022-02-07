@@ -97,7 +97,7 @@ type OSWrapper struct{}
 
 // OpenFile is a wrapper of os.OpenFile
 func (io *OSWrapper) OpenFile(name string, flag int, perm os.FileMode) (LimitedFile, error) {
-	return os.OpenFile(filepath.Clean(name), flag, perm)
+	return os.OpenFile(filepath.Clean(name), flag, perm) // #nosec G304
 }
 
 // Stat is a wrapper of os.Stat

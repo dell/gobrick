@@ -2,11 +2,13 @@ package scsi
 
 import (
 	"context"
+
 	"github.com/dell/gobrick/pkg/scsi"
 )
 
 //go:generate ./generate_mock.sh
 
+// SCSI defines methods for scsi operations
 type SCSI interface {
 	IsDeviceExist(ctx context.Context, device string) bool
 	RescanSCSIHostByHCTL(ctx context.Context, h scsi.HCTL) error

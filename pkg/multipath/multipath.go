@@ -22,12 +22,13 @@ package multipath
 
 import (
 	"context"
-	"github.com/dell/gobrick/internal/logger"
-	"github.com/dell/gobrick/internal/tracer"
-	wrp "github.com/dell/gobrick/internal/wrappers"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/dell/gobrick/internal/logger"
+	"github.com/dell/gobrick/internal/tracer"
+	wrp "github.com/dell/gobrick/internal/wrappers"
 )
 
 const (
@@ -35,8 +36,9 @@ const (
 	multipathDaemon = "multipathd"
 )
 
-func NewMultipath(chroot string) *multipath {
-	mp := &multipath{
+// NewMultipath initializes multipath struct
+func NewMultipath(chroot string) *Multipath {
+	mp := &Multipath{
 		chroot:   chroot,
 		osexec:   &wrp.OSExecWrapper{},
 		filePath: &wrp.FilepathWrapper{},
@@ -44,7 +46,8 @@ func NewMultipath(chroot string) *multipath {
 	return mp
 }
 
-type multipath struct {
+// Multipath defines implementation of LimitedOSExec and LimitedFile path interfaces
+type Multipath struct {
 	chroot string
 
 	osexec   wrp.LimitedOSExec
@@ -54,7 +57,7 @@ type multipath struct {
 // AddWWID add wwid to the list of know multipath wwids.
 //        This has the effect of multipathd being willing to create a dm for a
 //        multipath even when there's only 1 device.
-func (mp *multipath) AddWWID(ctx context.Context, wwid string) error {
+func (mp *Multipath) AddWWID(ctx context.Context, wwid string) error {
 	defer tracer.TraceFuncCall(ctx, "multipath.AddWWID")()
 	return mp.addWWID(ctx, wwid)
 }
@@ -64,31 +67,31 @@ func (mp *multipath) AddWWID(ctx context.Context, wwid string) error {
 //        for multipath.
 //        Together with `multipath_add_wwid` we can create a multipath when
 //        there's only 1 path.
-func (mp *multipath) AddPath(ctx context.Context, path string) error {
+func (mp *Multipath) AddPath(ctx context.Context, path string) error {
 	defer tracer.TraceFuncCall(ctx, "multipath.AddPath")()
 	return mp.changePath(ctx, "add", path)
 }
 
 // DelPath remove a path from multipathd mapping
-func (mp *multipath) DelPath(ctx context.Context, path string) error {
+func (mp *Multipath) DelPath(ctx context.Context, path string) error {
 	defer tracer.TraceFuncCall(ctx, "multipath.DelPath")()
 	return mp.changePath(ctx, "del", path)
 }
 
 // FlushDevice flush multipath device. To prevent stucking always use context.WithTimeout
-func (mp *multipath) FlushDevice(ctx context.Context, deviceMapName string) error {
+func (mp *Multipath) FlushDevice(ctx context.Context, deviceMapName string) error {
 	defer tracer.TraceFuncCall(ctx, "multipath.FlushDevice")()
 	return mp.flushDevice(ctx, deviceMapName)
 }
 
 // IsDaemonRunning check if multipath daemon running
-func (mp *multipath) IsDaemonRunning(ctx context.Context) bool {
+func (mp *Multipath) IsDaemonRunning(ctx context.Context) bool {
 	defer tracer.TraceFuncCall(ctx, "multipath.IsDaemonRunning")()
 	return mp.isDaemonRunning(ctx)
 }
 
 // GetDMWWID read DeviceMapper WWID from multipathd
-func (mp *multipath) GetDMWWID(ctx context.Context, deviceMapName string) (string, error) {
+func (mp *Multipath) GetDMWWID(ctx context.Context, deviceMapName string) (string, error) {
 	defer tracer.TraceFuncCall(ctx, "multipath.GetDMWWID")()
 	return mp.getDMWWID(ctx, deviceMapName)
 }
@@ -100,7 +103,7 @@ func returnError(err error, resp []byte) error {
 	return fmt.Errorf("unexpected result: %s", string(resp))
 }
 
-func (mp *multipath) addWWID(ctx context.Context, wwid string) error {
+func (mp *Multipath) addWWID(ctx context.Context, wwid string) error {
 	logger.Info(ctx, "multipath - add wwid: %s", wwid)
 	resp, err := mp.runCommand(ctx, multipathTool, []string{"-a", wwid})
 	if strings.Contains(string(resp), fmt.Sprintf("wwid '%s' added", wwid)) {
@@ -109,7 +112,7 @@ func (mp *multipath) addWWID(ctx context.Context, wwid string) error {
 	return returnError(err, resp)
 }
 
-func (mp *multipath) changePath(ctx context.Context, action string, path string) error {
+func (mp *Multipath) changePath(ctx context.Context, action string, path string) error {
 	logger.Info(ctx, "multipath - %s path: %s", action, path)
 	resp, err := mp.runCommand(ctx, multipathDaemon, []string{action, "path", path})
 	if strings.TrimSpace(string(resp)) == "ok" {
@@ -118,7 +121,7 @@ func (mp *multipath) changePath(ctx context.Context, action string, path string)
 	return returnError(err, resp)
 }
 
-func (mp *multipath) isDaemonRunning(ctx context.Context) bool {
+func (mp *Multipath) isDaemonRunning(ctx context.Context) bool {
 	logger.Info(ctx, "multipath - check daemon is running")
 	resp, err := mp.runCommand(ctx, multipathDaemon, []string{"show", "status"})
 	if err != nil {
@@ -137,13 +140,13 @@ func (mp *multipath) isDaemonRunning(ctx context.Context) bool {
 	return true
 }
 
-func (mp *multipath) flushDevice(ctx context.Context, deviceMapName string) error {
+func (mp *Multipath) flushDevice(ctx context.Context, deviceMapName string) error {
 	logger.Info(ctx, "multipath - start flush dm: %s", deviceMapName)
 	_, err := mp.runCommand(ctx, multipathTool, []string{"-f", deviceMapName})
 	return err
 }
 
-func (mp *multipath) getDMWWID(ctx context.Context, deviceMapName string) (string, error) {
+func (mp *Multipath) getDMWWID(ctx context.Context, deviceMapName string) (string, error) {
 	logger.Info(ctx, "multipath - resolve WWID: %s", deviceMapName)
 	var dataRead bool
 	var output string
@@ -175,7 +178,7 @@ func (mp *multipath) getDMWWID(ctx context.Context, deviceMapName string) (strin
 	return "", errors.New(msg)
 }
 
-func (mp *multipath) runCommand(ctx context.Context, command string, args []string) ([]byte, error) {
+func (mp *Multipath) runCommand(ctx context.Context, command string, args []string) ([]byte, error) {
 	if mp.chroot != "" {
 		args = append([]string{mp.chroot, command}, args...)
 		command = "chroot"

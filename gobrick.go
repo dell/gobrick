@@ -19,18 +19,23 @@
 package gobrick
 
 import (
+	"time"
+
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
-	"time"
 )
 
+// Device defines device info
 type Device struct {
 	WWN         string
 	Name        string
 	MultipathID string
 }
 
+// Logger defines logger interface used
 type Logger = logger.Logger
+
+// Tracer defines tracing interface used
 type Tracer = tracer.Tracer
 
 // SetLogger set custom logger for gobrick

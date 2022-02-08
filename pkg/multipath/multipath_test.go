@@ -20,12 +20,13 @@ package multipath
 
 import (
 	"context"
-	mh "github.com/dell/gobrick/internal/mockhelper"
-	wrp "github.com/dell/gobrick/internal/wrappers"
 	"fmt"
-	"github.com/golang/mock/gomock"
 	"reflect"
 	"testing"
+
+	mh "github.com/dell/gobrick/internal/mockhelper"
+	wrp "github.com/dell/gobrick/internal/wrappers"
+	"github.com/golang/mock/gomock"
 )
 
 type mpFields struct {
@@ -119,7 +120,7 @@ func Test_multipath_AddPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mp := &multipath{
+			mp := &Multipath{
 				chroot:   tt.fields.chroot,
 				osexec:   tt.fields.osexec,
 				filePath: tt.fields.filePath,
@@ -156,7 +157,7 @@ func Test_multipath_AddWWID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mp := &multipath{
+			mp := &Multipath{
 				chroot:   tt.fields.chroot,
 				osexec:   tt.fields.osexec,
 				filePath: tt.fields.filePath,
@@ -193,7 +194,7 @@ func Test_multipath_DelPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mp := &multipath{
+			mp := &Multipath{
 				chroot:   tt.fields.chroot,
 				osexec:   tt.fields.osexec,
 				filePath: tt.fields.filePath,
@@ -258,7 +259,7 @@ func Test_multipath_FlushDevice(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mp := &multipath{
+			mp := &Multipath{
 				chroot:   tt.fields.chroot,
 				osexec:   tt.fields.osexec,
 				filePath: tt.fields.filePath,
@@ -369,7 +370,7 @@ mpathdtpu dm-17 368ccf09800563738e15a11c113e1968e`, mh.ValidDMName, mh.ValidWWID
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mp := &multipath{
+			mp := &Multipath{
 				chroot:   tt.fields.chroot,
 				osexec:   tt.fields.osexec,
 				filePath: tt.fields.filePath,
@@ -468,7 +469,7 @@ busy: False
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mp := &multipath{
+			mp := &Multipath{
 				chroot:   tt.fields.chroot,
 				osexec:   tt.fields.osexec,
 				filePath: tt.fields.filePath,
@@ -556,7 +557,7 @@ func Test_multipath_runCommand(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mp := &multipath{
+			mp := &Multipath{
 				chroot:   tt.fields.chroot,
 				osexec:   tt.fields.osexec,
 				filePath: tt.fields.filePath,

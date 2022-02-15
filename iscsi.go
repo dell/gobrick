@@ -532,17 +532,17 @@ func (c *ISCSIConnector) discoverDevice(
 					logger.Info(ctx, "device found: %s", dev)
 
 					// TODO: Remove loggers
-					logger.Info("-----------------")
-					logger.Info("volume wwn: %s", info.WWN)
+					logger.Info(ctx, "-----------------")
+					logger.Info(ctx, "volume wwn: %s", info.WWN)
 
 					if info.WWN == "" {
 						result <- dev
 						return
 					} else {
-						logger.Info("device: %s", dev)
+						logger.Info(ctx, "device: %s", dev)
 						devices := [1]string{dev}
 						deviceWwn, _ := c.scsi.GetDeviceWWN(ctx, devices)
-						logger.Info("device wwn: %s", deviceWwn)
+						logger.Info(ctx, "device wwn: %s", deviceWwn)
 						if info.WWN == deviceWwn {
 							result <- dev
 							return

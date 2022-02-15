@@ -4,11 +4,13 @@ package wrappers
 
 import (
 	"context"
-	"github.com/dell/goiscsi"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/dell/goiscsi"
+	"github.com/dell/gonvme"
 )
 
 type LimitedFileInfo interface {
@@ -53,10 +55,13 @@ type ISCSILib interface {
 }
 
 type NVMeTCP interface {
-	DiscoverNVMeTCPTargets(address string, login bool) ([]NVMeTarget, error)
+	DiscoverNVMeTCPTargets(address string, login bool) ([]gonvme.NVMeTarget, error)
 	GetInitiators(filename string) ([]string, error)
-	NVMeConnect(target NVMeTarget) error
-	NVMeDisonnect(target NVMeTarget) error
+	NVMeConnect(target gonvme.NVMeTarget) error
+	NVMeDisonnect(target gonvme.NVMeTarget) error
+	GetSessions() ([]gonvme.NVMESession, error)
+	ListNamespaceDevices() map[string][]string
+	GetNamespaceData(path string, namespaceID string) (string, error)
 }
 
 // wrappers

@@ -22,9 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"path"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,12 +40,13 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+/*
 const (
 	iSCSIFailedSessionMinimumLoginRetryInterval = time.Second * 300
 	iSCSIWaitDeviceTimeoutDefault               = time.Second * 30
 	iSCSIWaitDeviceRegisterTimeoutDefault       = time.Second * 10
 	iSCSIMaxParallelOperationsDefault           = 5
-)
+)*/
 
 type NVMeTCPConnectorParams struct {
 	// nvmeLib command will run from this chroot
@@ -165,7 +164,7 @@ func (c *NVMeTCPConnector) ConnectVolume(ctx context.Context, info NVMeTCPVolume
 	if err != nil {
 		return Device{}, err
 	}
-	sessions := ret.([]goiscsi.ISCSISession)
+	sessions := ret.([]gonvme.NVMESession)
 
 	ret, _, _ = c.singleCall.Do(
 		"IsDaemonRunning",
@@ -179,7 +178,7 @@ func (c *NVMeTCPConnector) ConnectVolume(ctx context.Context, info NVMeTCPVolume
 		d, err = c.connectMultipathDevice(ctx, sessions, info) //inprogress
 	} else {
 		logger.Info(ctx, "start single device connection")
-		d, err = c.connectSingleDevice(ctx, sessions, info)
+		//d, err = c.connectSingleDevice(ctx, sessions, info)
 	}
 	if err == nil {
 		if c.scsi.CheckDeviceIsValid(ctx, path.Join("/dev/", d.Name)) {
@@ -194,7 +193,7 @@ func (c *NVMeTCPConnector) ConnectVolume(ctx context.Context, info NVMeTCPVolume
 	return Device{}, err
 }
 
-func (c *NVMeTCPConnector) DisconnectVolume(ctx context.Context, info ISCSIVolumeInfo) error {
+func (c *NVMeTCPConnector) DisconnectVolume(ctx context.Context, info NVMeTCPVolumeInfo) error {
 	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.DisconnectVolume")()
 	if err := c.limiter.Acquire(ctx, 1); err != nil {
 		return errors.New("too many parallel operations. try later")
@@ -232,34 +231,20 @@ func addDefaultNVMeTCPPortToVolumeInfoPortals(info *NVMeTCPVolumeInfo) {
 	}
 }
 
-func (c *NVMeTCPConnector) cleanConnection(ctx context.Context, force bool, info ISCSIVolumeInfo) error {
+func (c *NVMeTCPConnector) cleanConnection(ctx context.Context, force bool, info NVMeTCPVolumeInfo) error {
 	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.cleanConnection")()
 	var devices []string
-	for _, t := range info.Targets {
-		session, found, err := c.getSessionByTargetInfo(ctx, t)
-		if err != nil {
-			logger.Error(ctx, "failed to get iSCSI session: %s", err.Error())
-			if force {
-				continue
-			}
-			return err
-		}
-		if !found {
-			continue
-		}
-		hctl, err := c.findHCTLByISCSISessionID(
-			ctx, session.SID, strconv.FormatInt(int64(info.Lun), 10))
-		if err != nil {
-			logger.Error(ctx, "failed to get scsi info for iSCSI session: %s", err.Error())
-			continue
+	wwn := info.WWN
 
+	namespaceDevices := c.nvmeTCPLib.ListNamespaceDevices()
+
+	for devicePath, _ := range namespaceDevices {
+		for _, namespace := range namespaceDevices[devicePath] {
+			nguid, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespace)
+			if c.wwnMatches(nguid, wwn) {
+				devices = append(devices, devicePath)
+			}
 		}
-		dev, err := c.scsi.GetDeviceNameByHCTL(ctx, hctl)
-		if err != nil {
-			logger.Error(ctx, "failed to resolve iSCSI device name: %s", err.Error())
-			continue
-		}
-		devices = append(devices, dev)
 	}
 	if len(devices) == 0 {
 		return nil
@@ -272,13 +257,14 @@ func (c *NVMeTCPConnector) connectSingleDevice(
 	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.connectSingleDevice")()
 	devCH := make(chan string, len(sessions))
 	wg := sync.WaitGroup{}
-	discoveryCtx, cFunc := context.WithTimeout(ctx, c.waitDeviceTimeout)
+	//discoveryCtx, cFunc := context.WithTimeout(ctx, c.waitDeviceTimeout)
+	_, cFunc := context.WithTimeout(ctx, c.waitDeviceTimeout)
 	defer cFunc()
 
-	for _, s := range sessions {
+	/*for _, s := range sessions {
 		wg.Add(1)
-		go c.discoverDevice(discoveryCtx, &wg, devCH, s, info)
-	}
+		//go c.discoverDevice(discoveryCtx, &wg, devCH, s, info)
+	}*/
 	// for non blocking wg wait
 	wgCH := make(chan struct{})
 	go func() {
@@ -343,7 +329,7 @@ func (c *NVMeTCPConnector) connectSingleDevice(
 	}
 }
 
-func readDevicesFromResultCH(ch chan string, result []string) []string {
+/*func readDevicesFromResultCH(ch chan string, result []string) []string {
 	for {
 		select {
 		case d := <-ch:
@@ -352,7 +338,7 @@ func readDevicesFromResultCH(ch chan string, result []string) []string {
 			return result
 		}
 	}
-}
+}*/
 
 //inprogress
 func (c *NVMeTCPConnector) connectMultipathDevice(
@@ -456,7 +442,7 @@ func (c *NVMeTCPConnector) validateNVMeTCPVolumeInfo(ctx context.Context, info N
 		}
 	}
 
-	if info.Wwn == "" {
+	if info.WWN == "" {
 		return errors.New("invalid volume wwn")
 	}
 
@@ -469,43 +455,42 @@ func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGrou
 	wwn := info.WWN
 
 	namespaceDevices := c.nvmeTCPLib.ListNamespaceDevices()
-	namespaces := getNamespacesFromDevices(namespaceDevices)
 
-	for _, devicePath := range namespaceDevices {
+	for devicePath, _ := range namespaceDevices {
 		for _, namespace := range namespaceDevices[devicePath] {
-			nguid := c.nvmeTCPLib.GetNamespaceData(devicePath, namespace)
-			if c.wwnMatches(nguid, wwn){
+			nguid, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespace)
+			if c.wwnMatches(nguid, wwn) {
 				result <- devicePath
 			}
 		}
 	}
 }
 
-func (c *NVMeTCPConnector) wwnMatches(string nguid, string wwn) {
+func (c *NVMeTCPConnector) wwnMatches(nguid, wwn string) bool {
 
 	/*
-	Sample wwn : naa.68ccf098001111a2222b3d4444a1b23c
-	wwn1 : 1111a2222b3d4444
-	wwn2 : a1b23c
+		Sample wwn : naa.68ccf098001111a2222b3d4444a1b23c
+		wwn1 : 1111a2222b3d4444
+		wwn2 : a1b23c
 
-	Sample nguid : 1111a2222b3d44448ccf096800a1b23c
+		Sample nguid : 1111a2222b3d44448ccf096800a1b23c
 	*/
 	if len(wwn) < 36 {
 		return false
 	}
-	wwn1 := wwn[13:len(wwn)-7]
-	wwn2 := wwn[len(wwn)-6:len(wwn)-1]
+	wwn1 := wwn[13 : len(wwn)-7]
+	wwn2 := wwn[len(wwn)-6 : len(wwn)-1]
 
-	 if strings.Contains(nguid, wwn1) && strings.Contains(nguid, wwn2) {
-		 return true
-	 }
-	 return false
+	if strings.Contains(nguid, wwn1) && strings.Contains(nguid, wwn2) {
+		return true
+	}
+	return false
 }
 
-///
+/*
 func (c *NVMeTCPConnector) getNamespacesFromDevices(map[string][]string namespaceDevices) {
- 
-	namespaces := make(map[string])
+
+	namespaces := make(map[string]))
 	for _, nsDevice := range namespaceDevices {
 		for _, ns := range nsDevice {
 			if !c.mapContains(namespaces, ns){
@@ -524,12 +509,11 @@ func (c *NVMeTCPConnector) mapContains(map[string] stringMap, string value) {
 		}
 	}
 	return false
-}
-
+}*/
 
 //done
 func (c *NVMeTCPConnector) checkNVMeTCPSessions(
-	ctx context.Context, info ISCSIVolumeInfo) ([]gonvme.NVMESession, error) {
+	ctx context.Context, info NVMeTCPVolumeInfo) ([]gonvme.NVMESession, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.checkNVMeTCPSessions")()
 	var activeSessions []gonvme.NVMESession
 	//var targetsToLogin []NVMeTCPTargetInfo
@@ -537,7 +521,7 @@ func (c *NVMeTCPConnector) checkNVMeTCPSessions(
 		logger.Info(ctx,
 			"check NVMe session for %s %s", t.Portal, t.Target)
 
-		session, found, err := c.getSessionByTargetInfo(ctx, t)
+		session, _, err := c.getSessionByTargetInfo(ctx, t)
 		if err != nil {
 			logger.Error(ctx,
 				"unable to get nvme session info: %s", err.Error())
@@ -555,43 +539,6 @@ func (c *NVMeTCPConnector) checkNVMeTCPSessions(
 	}
 	logger.Info(ctx, "found active nvme sessions")
 	return activeSessions, nil
-}
-
-func (c *NVMeTCPConnector) tryISCSILogin(
-	ctx context.Context, targets []ISCSITargetInfo, force bool) ([]goiscsi.ISCSISession, error) {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.tryISCSILogin")()
-	var sessions []goiscsi.ISCSISession
-	for _, t := range targets {
-		logPrefix := fmt.Sprintf("Portal: %s, Target: %s :", t.Portal, t.Target)
-		tgt := goiscsi.ISCSITarget{Portal: t.Portal, Target: t.Target}
-		logger.Info(ctx, logPrefix+"trying login to iSCSI target")
-		mutexKey := strings.Join([]string{t.Portal, t.Target}, ":")
-		if !(c.loginLock.RateCheck(
-			mutexKey,
-			c.failedSessionMinimumLoginRetryInterval) || force) {
-			logger.Error(ctx, logPrefix+"rate limit - skip login")
-			continue
-		}
-		err := c.nvmeTCPLib.PerformLogin(tgt)
-		if err != nil {
-			logger.Error(ctx, logPrefix+"can't login to iSCSI target: %s", err.Error())
-			continue
-		}
-
-		s, found, err := c.getSessionByTargetInfo(ctx, t)
-		if err != nil || !found {
-			logger.Error(ctx, logPrefix+"can't read session info after login")
-			continue
-		}
-		logger.Info(ctx, logPrefix+"successfully login to iSCSI target")
-		sessions = append(sessions, s)
-	}
-	if len(targets) != 0 && len(sessions) == 0 {
-		msg := "can't login to all Targets"
-		logger.Error(ctx, msg)
-		return nil, errors.New(msg)
-	}
-	return sessions, nil
 }
 
 /*

@@ -2,6 +2,8 @@ module github.com/dell/gobrick
 
 go 1.17
 
+replace github.com/dell/gonvme => ../gonvme
+
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dell/goiscsi v1.1.0

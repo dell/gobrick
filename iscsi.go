@@ -154,6 +154,7 @@ type ISCSITargetInfo struct {
 type ISCSIVolumeInfo struct {
 	Targets []ISCSITargetInfo
 	Lun     int
+	WWN     string
 }
 
 func singleCallKeyForISCSITargets(info ISCSIVolumeInfo) string {
@@ -529,8 +530,24 @@ func (c *ISCSIConnector) discoverDevice(
 						}
 					}
 					logger.Info(ctx, "device found: %s", dev)
-					result <- dev
-					return
+
+					// TODO: Remove loggers
+					logger.Info("-----------------")
+					logger.Info("volume wwn: %s", info.WWN)
+
+					if info.WWN == "" {
+						result <- dev
+						return
+					} else {
+						logger.Info("device: %s", dev)
+						devices := [1]string{dev}
+						deviceWwn, _ := c.scsi.GetDeviceWWN(ctx, devices)
+						logger.Info("device wwn: %s", deviceWwn)
+						if info.WWN == deviceWwn {
+							result <- dev
+							return
+						}
+					}
 				}
 				logger.Error(ctx, err.Error())
 

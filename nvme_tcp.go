@@ -37,6 +37,7 @@ import (
 	"github.com/dell/gobrick/pkg/multipath"
 	"github.com/dell/gobrick/pkg/scsi"
 	"github.com/dell/goiscsi"
+	"github.com/dell/gonvme"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sync/singleflight"
 )
@@ -134,7 +135,7 @@ type NVMeTCPTargetInfo struct {
 
 type NVMeTCPVolumeInfo struct {
 	Targets []NVMeTCPTargetInfo
-	Lun     int
+	WWN     string
 }
 
 func singleCallKeyForNVMeTCPTargets(info NVMeTCPVolumeInfo) string {
@@ -170,12 +171,12 @@ func (c *NVMeTCPConnector) ConnectVolume(ctx context.Context, info NVMeTCPVolume
 		"IsDaemonRunning",
 		func() (interface{}, error) { return c.multipath.IsDaemonRunning(ctx), nil })
 	multipathIsEnabled := ret.(bool)
-	// ---------------------------
+
 	var d Device
 
 	if multipathIsEnabled {
 		logger.Info(ctx, "start multipath device connection")
-		d, err = c.connectMultipathDevice(ctx, sessions, info)
+		d, err = c.connectMultipathDevice(ctx, sessions, info) //inprogress
 	} else {
 		logger.Info(ctx, "start single device connection")
 		d, err = c.connectSingleDevice(ctx, sessions, info)
@@ -276,7 +277,7 @@ func (c *NVMeTCPConnector) connectSingleDevice(
 
 	for _, s := range sessions {
 		wg.Add(1)
-		go c.discoverDevice(discoveryCtx, 4, &wg, devCH, s, info)
+		go c.discoverDevice(discoveryCtx, &wg, devCH, s, info)
 	}
 	// for non blocking wg wait
 	wgCH := make(chan struct{})
@@ -353,6 +354,7 @@ func readDevicesFromResultCH(ch chan string, result []string) []string {
 	}
 }
 
+//inprogress
 func (c *NVMeTCPConnector) connectMultipathDevice(
 	ctx context.Context, sessions []gonvme.NVMESession, info NVMeTCPVolumeInfo) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.connectMultipathDevice")()
@@ -360,11 +362,8 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 	wg := sync.WaitGroup{}
 	discoveryCtx, cFunc := context.WithTimeout(ctx, c.waitDeviceTimeout)
 	defer cFunc()
-	//--------------------------
-	for _, s := range sessions {
-		wg.Add(1)
-		go c.discoverDevice(discoveryCtx, 4, &wg, devCH, s, info)
-	}
+
+	go c.discoverDevice(discoveryCtx, &wg, devCH, info)
 	// for non blocking wg wait
 	wgCH := make(chan struct{})
 	go func() {
@@ -383,19 +382,19 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 			return Device{}, errors.New("connectMultipathDevice canceled")
 		default:
 		}
-		devices = readDevicesFromResultCH(devCH, devices)
+		//devices = readDevicesFromResultCH(devCH, devices)
 		// check all discovery gorutines finished
 		if !discoveryComplete {
 			select {
 			case <-wgCH:
 				discoveryComplete = true
-				logger.Info(ctx, "all discovery goroutines complete")
+				logger.Info(ctx, "all discover goroutines complete")
 			default:
-				logger.Info(ctx, "discovery goroutines are still running")
+				logger.Info(ctx, "discover goroutines are still running")
 			}
 		}
 		if discoveryComplete && len(devices) == 0 {
-			msg := "discovery complete but devices not found"
+			msg := "discover complete but devices not found"
 			logger.Error(ctx, msg)
 			return Device{}, errors.New(msg)
 		}
@@ -457,136 +456,104 @@ func (c *NVMeTCPConnector) validateNVMeTCPVolumeInfo(ctx context.Context, info N
 		}
 	}
 
+	if info.Wwn == "" {
+		return errors.New("invalid volume wwn")
+	}
+
 	return nil
 }
 
-func (c *NVMeTCPConnector) discoverDevice(
-	ctx context.Context, rescans int, wg *sync.WaitGroup, result chan string,
-	session gonvme.NVMESession, info NVMeTCPVolumeInfo) {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.discoverDevice")()
+func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, result chan string, info NVMeTCPVolumeInfo) {
+	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.findDevice")()
 	defer wg.Done()
-	lun := strconv.FormatInt(int64(info.Lun), 10)
+	wwn := info.WWN
 
-	var numRescans, secondsNextScan int
+	namespaceDevices := c.nvmeTCPLib.ListNamespaceDevices()
+	namespaces := getNamespacesFromDevices(namespaceDevices)
 
-	numRescans = 0
-	secondsNextScan = 1
-
-	var hctl scsi.HCTL
-	var hctlFound bool
-	doScans := true
-	for doScans {
-		if !hctlFound || !hctl.IsFullInfo() {
-			resp, err := c.findHCTLByISCSISessionID(ctx, session.SID, lun)
-			if err == nil {
-				hctlFound = true
-				hctl = resp
-			} else {
-				logger.Error(ctx, err.Error())
+	for _, devicePath := range namespaceDevices {
+		for _, namespace := range namespaceDevices[devicePath] {
+			nguid := c.nvmeTCPLib.GetNamespaceData(devicePath, namespace)
+			if c.wwnMatches(nguid, wwn){
+				result <- devicePath
 			}
-		}
-		if hctlFound {
-			if secondsNextScan <= 0 {
-				numRescans++
-				err := c.scsi.RescanSCSIHostByHCTL(ctx, hctl)
-				if err != nil {
-					logger.Error(ctx, err.Error())
-				}
-				secondsNextScan = int(math.Pow(float64(numRescans+2), 2))
-			}
-			if hctl.IsFullInfo() {
-				dev, err := c.scsi.GetDeviceNameByHCTL(ctx, hctl)
-				if err == nil {
-					// we found device without rescans, information could be outdated, try to refresh it
-					if numRescans == 0 {
-						logger.Debug(ctx, "device %s found without scanning, "+
-							"try to refresh device information", dev)
-						err := c.scsi.RescanSCSIDeviceByHCTL(ctx, hctl)
-						if err != nil {
-							logger.Error(ctx, err.Error())
-						}
-					}
-					logger.Info(ctx, "device found: %s", dev)
-					result <- dev
-					return
-				}
-				logger.Error(ctx, err.Error())
-
-			}
-		}
-		select {
-		case <-ctx.Done():
-			logger.Info(ctx, "device discovery canceled")
-			doScans = false
-		default:
-			doScans = numRescans <= rescans
-		}
-		if doScans {
-			// skip wait for first iteration in manual scan mode
-			if numRescans >= 0 {
-				time.Sleep(time.Second)
-			}
-			secondsNextScan--
 		}
 	}
 }
 
+func (c *NVMeTCPConnector) wwnMatches(string nguid, string wwn) {
+
+	/*
+	Sample wwn : naa.68ccf098001111a2222b3d4444a1b23c
+	wwn1 : 1111a2222b3d4444
+	wwn2 : a1b23c
+
+	Sample nguid : 1111a2222b3d44448ccf096800a1b23c
+	*/
+	if len(wwn) < 36 {
+		return false
+	}
+	wwn1 := wwn[13:len(wwn)-7]
+	wwn2 := wwn[len(wwn)-6:len(wwn)-1]
+
+	 if strings.Contains(nguid, wwn1) && strings.Contains(nguid, wwn2) {
+		 return true
+	 }
+	 return false
+}
+
+///
+func (c *NVMeTCPConnector) getNamespacesFromDevices(map[string][]string namespaceDevices) {
+ 
+	namespaces := make(map[string])
+	for _, nsDevice := range namespaceDevices {
+		for _, ns := range nsDevice {
+			if !c.mapContains(namespaces, ns){
+				namespaces = append(namespaces, ns)
+			}
+		}
+	}
+}
+
+///
+func (c *NVMeTCPConnector) mapContains(map[string] stringMap, string value) {
+
+	for _, k := range stringMap {
+		if k == value {
+			return true
+		}
+	}
+	return false
+}
+
+
+//done
 func (c *NVMeTCPConnector) checkNVMeTCPSessions(
 	ctx context.Context, info ISCSIVolumeInfo) ([]gonvme.NVMESession, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.checkNVMeTCPSessions")()
 	var activeSessions []gonvme.NVMESession
-	var targetsToLogin []NVMeTCPTargetInfo
+	//var targetsToLogin []NVMeTCPTargetInfo
 	for _, t := range info.Targets {
-		tgt := gonvme.NVMeTarget{Portal: t.Portal, Target: t.Target}
 		logger.Info(ctx,
 			"check NVMe session for %s %s", t.Portal, t.Target)
-		opt := make(map[string]string)
-		opt["node.session.initial_login_retry_max"] = "1"
-		if c.chapEnabled {
-			opt["node.session.auth.authmethod"] = "CHAP"
-			opt["node.session.auth.username"] = c.chapUser
-			opt["node.session.auth.password"] = c.chapPassword
-		}
-		/*err := c.iscsiLib.CreateOrUpdateNode(tgt, opt)
-		if err != nil {
-			logger.Error(ctx,
-				"can't create or update target for %s %s: %s", t.Portal, t.Target, err)
-			continue
-		}
-		err = c.tryEnableManualISCSISessionMGMT(ctx, t)
-		if err != nil {
-			continue
-		}*/
+
 		session, found, err := c.getSessionByTargetInfo(ctx, t)
 		if err != nil {
 			logger.Error(ctx,
-				"unable to get iSCSI session info: %s", err.Error())
+				"unable to get nvme session info: %s", err.Error())
 			continue
-		}
-		if !found {
-			targetsToLogin = append(targetsToLogin, t)
-		}
-		if c.isISCSISessionActive(ctx, session) {
+		} else {
 			activeSessions = append(activeSessions, session)
 		}
 	}
 
 	errMsg := "can't find active iSCSI session"
 
-	// try login to Targets without sessions
-	if len(targetsToLogin) != 0 {
-		newSession, err := c.tryISCSILogin(ctx, targetsToLogin, len(activeSessions) == 0)
-		if err != nil && len(activeSessions) == 0 {
-			logger.Error(ctx, errMsg)
-			return nil, errors.New(errMsg)
-		}
-		activeSessions = append(activeSessions, newSession...)
-	}
 	if len(activeSessions) == 0 {
 		logger.Error(ctx, errMsg)
 		return nil, errors.New(errMsg)
 	}
-	logger.Info(ctx, "found active iSCSI session")
+	logger.Info(ctx, "found active nvme sessions")
 	return activeSessions, nil
 }
 
@@ -662,13 +629,6 @@ func (c *NVMeTCPConnector) tryEnableManualISCSISessionMGMT(ctx context.Context, 
 }
 */
 
-func (c *NVMeTCPConnector) isISCSISessionActive(
-	ctx context.Context, session goiscsi.ISCSISession) bool {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.isISCSISessionActive")()
-	return session.ISCSISessionState == goiscsi.ISCSISessionState_LOGGED_IN &&
-		session.ISCSIConnectionState == goiscsi.ISCSIConnectionState_LOGGED_IN
-}
-
 func (c *NVMeTCPConnector) getSessionByTargetInfo(ctx context.Context,
 	target NVMeTCPTargetInfo) (gonvme.NVMESession, bool, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.getSessionByTargetInfo")()
@@ -680,6 +640,7 @@ func (c *NVMeTCPConnector) getSessionByTargetInfo(ctx context.Context,
 		return r, false, err
 	}
 	var found bool
+	//TODO: check if comparision needs contains check
 	for _, s := range sessions {
 		if s.Target == target.Target && s.Portal == target.Portal {
 			r = s

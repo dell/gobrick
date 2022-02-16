@@ -100,6 +100,7 @@ type FCTargetInfo struct {
 type FCVolumeInfo struct {
 	Targets []FCTargetInfo
 	Lun     int
+	WWN     string
 }
 
 // FCHBA holds information about host local FC ports

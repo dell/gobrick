@@ -540,7 +540,7 @@ func (c *ISCSIConnector) discoverDevice(
 						return
 					} else {
 						logger.Info(ctx, "device: %s", dev)
-						devices := [1]string{dev}
+						devices := []string{dev}
 						deviceWwn, _ := c.scsi.GetDeviceWWN(ctx, devices)
 						logger.Info(ctx, "device wwn: %s", deviceWwn)
 						if info.WWN == deviceWwn {

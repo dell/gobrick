@@ -349,6 +349,7 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 	discoveryCtx, cFunc := context.WithTimeout(ctx, c.waitDeviceTimeout)
 	defer cFunc()
 
+	wg.Add(1)
 	go c.discoverDevice(discoveryCtx, &wg, devCH, info)
 	// for non blocking wg wait
 	wgCH := make(chan struct{})

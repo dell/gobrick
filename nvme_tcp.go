@@ -329,17 +329,6 @@ func (c *NVMeTCPConnector) connectSingleDevice(
 	}
 }
 
-/*func readDevicesFromResultCH(ch chan string, result []string) []string {
-	for {
-		select {
-		case d := <-ch:
-			result = append(result, d)
-		default:
-			return result
-		}
-	}
-}*/
-
 //inprogress
 func (c *NVMeTCPConnector) connectMultipathDevice(
 	ctx context.Context, sessions []gonvme.NVMESession, info NVMeTCPVolumeInfo) (Device, error) {
@@ -369,7 +358,7 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 			return Device{}, errors.New("connectMultipathDevice canceled")
 		default:
 		}
-		//devices = readDevicesFromResultCH(devCH, devices)
+		devices = readDevicesFromResultCH(devCH, devices)
 		// check all discovery gorutines finished
 		if !discoveryComplete {
 			select {

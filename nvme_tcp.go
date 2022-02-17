@@ -364,7 +364,7 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 			return Device{}, errors.New("connectMultipathDevice canceled")
 		default:
 		}
-		devices, nguid = readNVMeDevicesFromResultCH(devCH, devices)
+		devices, nguid := readNVMeDevicesFromResultCH(devCH, devices)
 		// check all discovery gorutines finished
 		if !discoveryComplete {
 			select {
@@ -462,7 +462,7 @@ func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGrou
 	}
 	devicePathResult := DevicePathResult{devicePaths: devicePaths, nguid: nguidResult}
 
-	result <- *devicePathResult
+	result <- devicePathResult
 }
 
 func (c *NVMeTCPConnector) wwnMatches(nguid, wwn string) bool {
@@ -488,12 +488,13 @@ func (c *NVMeTCPConnector) wwnMatches(nguid, wwn string) bool {
 
 func readNVMeDevicesFromResultCH(ch chan DevicePathResult, result []string) ([]string, string) {
 
+	devicePathResult := <-ch
 	var devicePaths []string
-	for _, paths := range ch.devicePaths {
+	for _, path := range devicePathResult.devicePaths {
 		// modify path /dev/nvme0n1 -> nvme0n1
 		devicePaths = append(devicePaths, path)
 	}
-	return devicePaths, ch.nguid
+	return devicePaths, devicePathResult.nguid
 }
 
 /*

@@ -492,7 +492,8 @@ func readNVMeDevicesFromResultCH(ch chan DevicePathResult, result []string) ([]s
 	var devicePaths []string
 	for _, path := range devicePathResult.devicePaths {
 		// modify path /dev/nvme0n1 -> nvme0n1
-		devicePaths = append(devicePaths, path)
+		newpath := strings.ReplaceAll(path, "/dev/", "")
+		devicePaths = append(devicePaths, newpath)
 	}
 	return devicePaths, devicePathResult.nguid
 }

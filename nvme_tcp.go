@@ -348,7 +348,8 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 	}()
 
 	var devices []string
-	var wwn, mpath string
+	var mpath string
+	wwn := info.WWN
 	var wwnAdded, discoveryComplete, lastTry bool
 	var endTime time.Time
 	for {
@@ -358,7 +359,7 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 			return Device{}, errors.New("connectMultipathDevice canceled")
 		default:
 		}
-		devices = readDevicesFromResultCH(devCH, devices)
+		devices = readNVMeDevicesFromResultCH(devCH, devices)
 		// check all discovery gorutines finished
 		if !discoveryComplete {
 			select {
@@ -375,11 +376,7 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 			return Device{}, errors.New(msg)
 		}
 		if wwn == "" && len(devices) != 0 {
-			var err error
-			wwn, err = c.scsi.GetDeviceWWN(ctx, devices)
-			if err != nil {
-				logger.Info(ctx, "wwn for devices %s not found", devices)
-			}
+			logger.Info(ctx, "Invalid WWN provided ")
 		}
 		if wwn != "" && mpath == "" {
 			var err error
@@ -465,7 +462,7 @@ func (c *NVMeTCPConnector) wwnMatches(nguid, wwn string) bool {
 
 		Sample nguid : 1111a2222b3d44448ccf096800a1b23c
 	*/
-	if len(wwn) < 36 {
+	if len(wwn) < 32 {
 		return false
 	}
 	wwn1 := wwn[13 : len(wwn)-7]
@@ -475,6 +472,18 @@ func (c *NVMeTCPConnector) wwnMatches(nguid, wwn string) bool {
 		return true
 	}
 	return false
+}
+
+func readNVMeDevicesFromResultCH(ch chan string, result []string) []string {
+	for {
+		select {
+		case d := <-ch:
+			// /dev/nvme0n1 -> nvme0n1
+			result = append(result, d)
+		default:
+			return result
+		}
+	}
 }
 
 /*

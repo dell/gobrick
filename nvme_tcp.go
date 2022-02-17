@@ -64,6 +64,11 @@ type NVMeTCPConnectorParams struct {
 	MaxParallelOperations int
 }
 
+type DevicePathResult struct {
+	devicePaths []string
+	nguid       string
+}
+
 func NewNVMeTCPConnector(params NVMeTCPConnectorParams) *NVMeTCPConnector {
 	mp := multipath.NewMultipath(params.Chroot)
 	s := scsi.NewSCSI(params.Chroot)
@@ -333,7 +338,7 @@ func (c *NVMeTCPConnector) connectSingleDevice(
 func (c *NVMeTCPConnector) connectMultipathDevice(
 	ctx context.Context, sessions []gonvme.NVMESession, info NVMeTCPVolumeInfo) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.connectMultipathDevice")()
-	devCH := make(chan string, len(sessions))
+	devCH := make(chan DevicePathResult)
 	wg := sync.WaitGroup{}
 	discoveryCtx, cFunc := context.WithTimeout(ctx, c.waitDeviceTimeout)
 	defer cFunc()
@@ -359,7 +364,7 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 			return Device{}, errors.New("connectMultipathDevice canceled")
 		default:
 		}
-		devices = readNVMeDevicesFromResultCH(devCH, devices)
+		devices, nguid = readNVMeDevicesFromResultCH(devCH, devices)
 		// check all discovery gorutines finished
 		if !discoveryComplete {
 			select {
@@ -393,7 +398,8 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 			}
 		}
 		if mpath != "" {
-			if err := c.scsi.WaitUdevSymlink(ctx, mpath, wwn); err == nil {
+			//use nguid as wwn for nvme devices
+			if err := c.scsi.WaitUdevSymlink(ctx, mpath, nguid); err == nil {
 				logger.Info(ctx, "multipath device found: %s", mpath)
 				return Device{WWN: wwn, Name: mpath, MultipathID: wwn}, nil
 			}
@@ -436,21 +442,27 @@ func (c *NVMeTCPConnector) validateNVMeTCPVolumeInfo(ctx context.Context, info N
 	return nil
 }
 
-func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, result chan string, info NVMeTCPVolumeInfo) {
+func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, result chan DevicePathResult, info NVMeTCPVolumeInfo) {
 	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.findDevice")()
 	defer wg.Done()
 	wwn := info.WWN
 
 	namespaceDevices := c.nvmeTCPLib.ListNamespaceDevices()
 
+	var devicePaths []string
+	nguidResult := ""
 	for devicePath, _ := range namespaceDevices {
 		for _, namespace := range namespaceDevices[devicePath] {
 			nguid, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespace)
 			if c.wwnMatches(nguid, wwn) {
-				result <- devicePath
+				devicePaths = append(devicePaths, devicePath)
+				nguidResult = nguid
 			}
 		}
 	}
+	devicePathResult := DevicePathResult{devicePaths: devicePaths, nguid: nguidResult}
+
+	result <- *devicePathResult
 }
 
 func (c *NVMeTCPConnector) wwnMatches(nguid, wwn string) bool {
@@ -474,16 +486,14 @@ func (c *NVMeTCPConnector) wwnMatches(nguid, wwn string) bool {
 	return false
 }
 
-func readNVMeDevicesFromResultCH(ch chan string, result []string) []string {
-	for {
-		select {
-		case d := <-ch:
-			// /dev/nvme0n1 -> nvme0n1
-			result = append(result, d)
-		default:
-			return result
-		}
+func readNVMeDevicesFromResultCH(ch chan DevicePathResult, result []string) ([]string, string) {
+
+	var devicePaths []string
+	for _, paths := range ch.devicePaths {
+		// modify path /dev/nvme0n1 -> nvme0n1
+		devicePaths = append(devicePaths, path)
 	}
+	return devicePaths, ch.nguid
 }
 
 /*

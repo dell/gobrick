@@ -22,11 +22,11 @@ package scsi
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
-	"errors"
-	"fmt"
 	"golang.org/x/sync/singleflight"
 	"os"
 	"path"
@@ -39,6 +39,7 @@ const (
 	diskByIDPath     = "/dev/disk/by-id/"
 	diskByIDSCSIPath = diskByIDPath + "scsi-"
 	diskByIDDMPath   = diskByIDPath + "dm-uuid-mpath-"
+	diskByIDDMPathNVMe   = diskByIDPath + "dm-uuid-mpath-eui."
 	scsiIDPath       = "/lib/udev/scsi_id"
 )
 
@@ -154,6 +155,11 @@ func (s *scsi) GetDeviceNameByHCTL(ctx context.Context, h HCTL) (string, error) 
 func (s *scsi) WaitUdevSymlink(ctx context.Context, deviceName string, wwn string) error {
 	defer tracer.TraceFuncCall(ctx, "scsi.WaitUdevSymlink")()
 	return s.waitUdevSymlink(ctx, deviceName, wwn)
+}
+
+func (s *scsi) WaitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error {
+	defer tracer.TraceFuncCall(ctx, "scsi.WaitUdevSymlinkNVMe")()
+	return s.waitUdevSymlinkNVMe(ctx, deviceName, wwn)
 }
 
 func (s *scsi) rescanSCSIHostByHCTL(ctx context.Context, addr HCTL) error {
@@ -437,6 +443,28 @@ func (s *scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 	var checkPath string
 	if strings.HasPrefix(deviceName, "dm-") {
 		checkPath = diskByIDDMPath + wwn
+	} else {
+		checkPath = diskByIDSCSIPath + wwn
+	}
+	symlink, err := s.filePath.EvalSymlinks(checkPath)
+	if err != nil {
+		msg := fmt.Sprintf("symlink for path %s not found: %s", checkPath, err.Error())
+		logger.Info(ctx, msg)
+		return errors.New(msg)
+	}
+	if d := strings.Replace(symlink, "/dev/", "", 1); d != deviceName {
+		msg := fmt.Sprintf("udev symlink point to unexpected device: %s", d)
+		logger.Info(ctx, msg)
+		return errors.New(msg)
+	}
+	logger.Info(ctx, "udev symlink for %s with WWN %s found", deviceName, wwn)
+	return nil
+}
+
+func (s *scsi) waitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error {
+	var checkPath string
+	if strings.HasPrefix(deviceName, "dm-") {
+		checkPath = diskByIDDMPathNVMe + wwn
 	} else {
 		checkPath = diskByIDSCSIPath + wwn
 	}

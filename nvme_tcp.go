@@ -185,6 +185,7 @@ func (c *NVMeTCPConnector) ConnectVolume(ctx context.Context, info NVMeTCPVolume
 		logger.Info(ctx, "start single device connection")
 		//d, err = c.connectSingleDevice(ctx, sessions, info)
 	}
+
 	if err == nil {
 		if c.scsi.CheckDeviceIsValid(ctx, path.Join("/dev/", d.Name)) {
 			return d, nil
@@ -313,7 +314,7 @@ func (c *NVMeTCPConnector) connectSingleDevice(
 		}
 		if wwn != "" {
 			for _, d := range devices {
-				if err := c.scsi.WaitUdevSymlink(ctx, d, wwn); err == nil {
+				if err := c.scsi.WaitUdevSymlinkNVMe(ctx, d, wwn); err == nil {
 					logger.Info(ctx, "registered device found: %s", d)
 					return Device{Name: d, WWN: wwn}, nil
 				}
@@ -365,6 +366,7 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 		default:
 		}
 		devices, nguid := readNVMeDevicesFromResultCH(devCH, devices)
+
 		// check all discovery gorutines finished
 		if !discoveryComplete {
 			select {
@@ -383,6 +385,7 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 		if wwn == "" && len(devices) != 0 {
 			logger.Info(ctx, "Invalid WWN provided ")
 		}
+
 		if wwn != "" && mpath == "" {
 			var err error
 			mpath, err = c.scsi.GetDMDeviceByChildren(ctx, devices)
@@ -399,7 +402,8 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 		}
 		if mpath != "" {
 			//use nguid as wwn for nvme devices
-			if err := c.scsi.WaitUdevSymlink(ctx, mpath, nguid); err == nil {
+			var err error
+			if err = c.scsi.WaitUdevSymlinkNVMe(ctx, mpath, nguid); err == nil {
 				logger.Info(ctx, "multipath device found: %s", mpath)
 				return Device{WWN: wwn, Name: mpath, MultipathID: wwn}, nil
 			}
@@ -651,3 +655,4 @@ func (c *NVMeTCPConnector) findHCTLByISCSISessionID(
 
 	return result, nil
 }
+

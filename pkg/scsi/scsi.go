@@ -117,6 +117,11 @@ func (s *scsi) GetDeviceWWN(ctx context.Context, devices []string) (string, erro
 	return s.getDeviceWWN(ctx, devices)
 }
 
+func (s *scsi) GetNVMEDeviceWWN(ctx context.Context, devices []string) (string, error) {
+	defer tracer.TraceFuncCall(ctx, "scsi.GetNVMEDeviceWWN")()
+	return s.getNVMEDeviceWWN(ctx, devices)
+}
+
 func (s *scsi) GetDevicesByWWN(ctx context.Context, wwn string) ([]string, error) {
 	defer tracer.TraceFuncCall(ctx, "scsi.GetDevicesByWWN")()
 	return s.getDevicesByWWN(ctx, wwn)
@@ -195,6 +200,23 @@ func (s *scsi) getDeviceWWN(ctx context.Context, devices []string) (string, erro
 	var err error
 	for _, d := range devices {
 		wwidFilePath := fmt.Sprintf("/sys/block/%s/device/wwid", d)
+		var result string
+		result, err = s.readWWIDFile(ctx, wwidFilePath)
+		if err == nil {
+			return result, nil
+		} else if s.os.IsNotExist(err) {
+			if result, err = s.getDeviceWWNWithSCSIID(ctx, d); err == nil {
+				return result, nil
+			}
+		}
+	}
+	return "", err
+}
+
+func (s *scsi) getNVMEDeviceWWN(ctx context.Context, devices []string) (string, error) {
+	var err error
+	for _, d := range devices {
+		wwidFilePath := fmt.Sprintf("/sys/block/%s/wwid", d)
 		var result string
 		result, err = s.readWWIDFile(ctx, wwidFilePath)
 		if err == nil {

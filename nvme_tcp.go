@@ -215,7 +215,7 @@ func (c *NVMeTCPConnector) DisconnectVolumeByDeviceName(ctx context.Context, nam
 		return errors.New("too many parallel operations. try later")
 	}
 	defer c.limiter.Release(1)
-	return c.baseConnector.disconnectDevicesByDeviceName(ctx, name)
+	return c.baseConnector.disconnectNVMEDevicesByDeviceName(ctx, name)
 }
 
 func (c *NVMeTCPConnector) GetInitiatorName(ctx context.Context) ([]string, error) {

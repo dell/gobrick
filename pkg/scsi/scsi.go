@@ -24,23 +24,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dell/gobrick/internal/logger"
-	"github.com/dell/gobrick/internal/tracer"
-	wrp "github.com/dell/gobrick/internal/wrappers"
-	"golang.org/x/sync/singleflight"
 	"os"
 	"path"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/dell/gobrick/internal/logger"
+	"github.com/dell/gobrick/internal/tracer"
+	wrp "github.com/dell/gobrick/internal/wrappers"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
-	diskByIDPath     = "/dev/disk/by-id/"
-	diskByIDSCSIPath = diskByIDPath + "scsi-"
-	diskByIDDMPath   = diskByIDPath + "dm-uuid-mpath-"
-	diskByIDDMPathNVMe   = diskByIDPath + "dm-uuid-mpath-eui."
-	scsiIDPath       = "/lib/udev/scsi_id"
+	diskByIDPath       = "/dev/disk/by-id/"
+	diskByIDSCSIPath   = diskByIDPath + "scsi-"
+	diskByIDDMPath     = diskByIDPath + "dm-uuid-mpath-"
+	diskByIDDMPathNVMe = diskByIDPath + "dm-uuid-mpath-eui."
+	scsiIDPath         = "/lib/udev/scsi_id"
 )
 
 func NewSCSI(chroot string) *scsi {
@@ -493,12 +494,12 @@ func (s *scsi) waitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn s
 	symlink, err := s.filePath.EvalSymlinks(checkPath)
 	if err != nil {
 		msg := fmt.Sprintf("symlink for path %s not found: %s", checkPath, err.Error())
-		logger.Info(ctx, msg)
+		logger.Error(ctx, msg)
 		return errors.New(msg)
 	}
 	if d := strings.Replace(symlink, "/dev/", "", 1); d != deviceName {
 		msg := fmt.Sprintf("udev symlink point to unexpected device: %s", d)
-		logger.Info(ctx, msg)
+		logger.Error(ctx, msg)
 		return errors.New(msg)
 	}
 	logger.Info(ctx, "udev symlink for %s with WWN %s found", deviceName, wwn)

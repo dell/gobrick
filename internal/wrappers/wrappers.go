@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/dell/goiscsi"
-  "github.com/dell/gonvme"
+	"github.com/dell/gonvme"
 )
 
 // LimitedFileInfo defines limited file info interface

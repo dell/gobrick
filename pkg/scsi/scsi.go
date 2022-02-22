@@ -129,11 +129,13 @@ func (s *Scsi) GetDeviceWWN(ctx context.Context, devices []string) (string, erro
 	return s.getDeviceWWN(ctx, devices)
 }
 
+// GetNVMEDeviceWWN gets wwn of nvme device
 func (s *Scsi) GetNVMEDeviceWWN(ctx context.Context, devices []string) (string, error) {
 	defer tracer.TraceFuncCall(ctx, "scsi.GetNVMEDeviceWWN")()
 	return s.getNVMEDeviceWWN(ctx, devices)
 }
 
+// GetDevicesByWWN fetches devices by wwn
 func (s *Scsi) GetDevicesByWWN(ctx context.Context, wwn string) ([]string, error) {
 	defer tracer.TraceFuncCall(ctx, "scsi.GetDevicesByWWN")()
 	return s.getDevicesByWWN(ctx, wwn)
@@ -179,6 +181,7 @@ func (s *Scsi) WaitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 	return s.waitUdevSymlink(ctx, deviceName, wwn)
 }
 
+// WaitUdevSymlinkNVMe checks if udev symlink for device specified by device name with WWN is found for nvme
 func (s *Scsi) WaitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error {
 	defer tracer.TraceFuncCall(ctx, "scsi.WaitUdevSymlinkNVMe")()
 	return s.waitUdevSymlinkNVMe(ctx, deviceName, wwn)

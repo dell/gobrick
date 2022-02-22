@@ -129,12 +129,12 @@ func (s *Scsi) GetDeviceWWN(ctx context.Context, devices []string) (string, erro
 	return s.getDeviceWWN(ctx, devices)
 }
 
-func (s *scsi) GetNVMEDeviceWWN(ctx context.Context, devices []string) (string, error) {
+func (s *Scsi) GetNVMEDeviceWWN(ctx context.Context, devices []string) (string, error) {
 	defer tracer.TraceFuncCall(ctx, "scsi.GetNVMEDeviceWWN")()
 	return s.getNVMEDeviceWWN(ctx, devices)
 }
 
-func (s *scsi) GetDevicesByWWN(ctx context.Context, wwn string) ([]string, error) {
+func (s *Scsi) GetDevicesByWWN(ctx context.Context, wwn string) ([]string, error) {
 	defer tracer.TraceFuncCall(ctx, "scsi.GetDevicesByWWN")()
 	return s.getDevicesByWWN(ctx, wwn)
 }
@@ -179,12 +179,12 @@ func (s *Scsi) WaitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 	return s.waitUdevSymlink(ctx, deviceName, wwn)
 }
 
-func (s *scsi) WaitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error {
+func (s *Scsi) WaitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error {
 	defer tracer.TraceFuncCall(ctx, "scsi.WaitUdevSymlinkNVMe")()
 	return s.waitUdevSymlinkNVMe(ctx, deviceName, wwn)
 }
 
-func (s *scsi) rescanSCSIHostByHCTL(ctx context.Context, addr HCTL) error {
+func (s *Scsi) rescanSCSIHostByHCTL(ctx context.Context, addr HCTL) error {
 	hostsDir := "/sys/class/scsi_host"
 	filePath := fmt.Sprintf("%s/host%s/scan", hostsDir, addr.Host)
 	scanString := fmt.Sprintf("%s %s %s", addr.Channel, addr.Target, addr.Lun)
@@ -230,7 +230,7 @@ func (s *Scsi) getDeviceWWN(ctx context.Context, devices []string) (string, erro
 	return "", err
 }
 
-func (s *scsi) getNVMEDeviceWWN(ctx context.Context, devices []string) (string, error) {
+func (s *Scsi) getNVMEDeviceWWN(ctx context.Context, devices []string) (string, error) {
 	var err error
 	for _, d := range devices {
 		wwidFilePath := fmt.Sprintf("/sys/block/%s/wwid", d)
@@ -247,7 +247,7 @@ func (s *scsi) getNVMEDeviceWWN(ctx context.Context, devices []string) (string, 
 	return "", err
 }
 
-func (s *scsi) getDeviceWWNWithSCSIID(ctx context.Context, device string) (string, error) {
+func (s *Scsi) getDeviceWWNWithSCSIID(ctx context.Context, device string) (string, error) {
 	logger.Debug(ctx, "get wwn with scsi_id for device: %s", device)
 	command := scsiIDPath
 	args := []string{"-g", "-p", "0x83", "/dev/" + device}
@@ -500,7 +500,7 @@ func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 	return nil
 }
 
-func (s *scsi) waitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error {
+func (s *Scsi) waitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error {
 	var checkPath string
 	if strings.HasPrefix(deviceName, "dm-") {
 		checkPath = diskByIDDMPathNVMe + wwn

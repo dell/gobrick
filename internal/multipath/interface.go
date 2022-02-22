@@ -4,6 +4,7 @@ import "context"
 
 //go:generate ./generate_mock.sh
 
+// Multipath defines methods for multipath related operations
 type Multipath interface {
 	AddWWID(ctx context.Context, wwid string) error
 	AddPath(ctx context.Context, path string) error

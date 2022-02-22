@@ -22,12 +22,13 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"log"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
 
-func loadTestData(filePath string, testConfig interface{}) {
-	data, err := ioutil.ReadFile(filePath)
+func loadTestData(filePathStr string, testConfig interface{}) {
+	data, err := ioutil.ReadFile(filepath.Clean(filePathStr))
 	if err != nil {
 		log.Printf("can't read file with test data, "+
 			"please check that file exist: %s",

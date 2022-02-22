@@ -2,11 +2,11 @@ package gobrick
 
 import (
 	"context"
+	"fmt"
 	"github.com/dell/gobrick/internal/mockhelper"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
 	wrp "github.com/dell/gobrick/internal/wrappers"
-	"fmt"
 	"github.com/dell/goiscsi"
 	"github.com/golang/mock/gomock"
 	"golang.org/x/sync/semaphore"

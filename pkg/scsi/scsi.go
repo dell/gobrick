@@ -44,8 +44,9 @@ const (
 	scsiIDPath         = "/lib/udev/scsi_id"
 )
 
-func NewSCSI(chroot string) *scsi {
-	scsi := &scsi{
+// NewSCSI initializes scsi struct
+func NewSCSI(chroot string) *Scsi {
+	scsi := &Scsi{
 		fileReader: &wrp.IOUTILWrapper{},
 		filePath:   &wrp.FilepathWrapper{},
 		os:         &wrp.OSWrapper{},
@@ -56,6 +57,7 @@ func NewSCSI(chroot string) *scsi {
 	return scsi
 }
 
+// HCTL defines host, channel, target, lun info
 type HCTL struct {
 	Host    string
 	Channel string
@@ -63,6 +65,7 @@ type HCTL struct {
 	Lun     string
 }
 
+// IsFullInfo validates HCTL struct
 func (h *HCTL) IsFullInfo() bool {
 	if h.Channel == "" || h.Channel == "-" ||
 		h.Target == "" || h.Target == "-" {
@@ -71,13 +74,15 @@ func (h *HCTL) IsFullInfo() bool {
 	return true
 }
 
+// DevicesHaveDifferentParentsErr defines a custom error
 type DevicesHaveDifferentParentsErr struct{}
 
 func (dperr *DevicesHaveDifferentParentsErr) Error() string {
 	return "device have different parent DMs"
 }
 
-type scsi struct {
+// Scsi defines scsi info
+type Scsi struct {
 	chroot string
 
 	fileReader wrp.LimitedIOUtil
@@ -88,32 +93,38 @@ type scsi struct {
 	singleCall *singleflight.Group
 }
 
-func (s *scsi) IsDeviceExist(ctx context.Context, device string) bool {
+// IsDeviceExist checks if scsi device exists
+func (s *Scsi) IsDeviceExist(ctx context.Context, device string) bool {
 	defer tracer.TraceFuncCall(ctx, "scsi.IsDeviceExist")()
 	return s.checkExist(ctx, path.Join("/dev/", device))
 }
 
-func (s *scsi) RescanSCSIHostByHCTL(ctx context.Context, addr HCTL) error {
+// RescanSCSIHostByHCTL performs scsi host rescan
+func (s *Scsi) RescanSCSIHostByHCTL(ctx context.Context, addr HCTL) error {
 	defer tracer.TraceFuncCall(ctx, "scsi.RescanSCSIHostByHCTL")()
 	return s.rescanSCSIHostByHCTL(ctx, addr)
 }
 
-func (s *scsi) RescanSCSIDeviceByHCTL(ctx context.Context, h HCTL) error {
+// RescanSCSIDeviceByHCTL performs scsi device rescan
+func (s *Scsi) RescanSCSIDeviceByHCTL(ctx context.Context, h HCTL) error {
 	defer tracer.TraceFuncCall(ctx, "scsi.RescanSCSIDeviceByHCTL")()
 	return s.rescanSCSIDeviceByHCTL(ctx, h)
 }
 
-func (s *scsi) DeleteSCSIDeviceByHCTL(ctx context.Context, h HCTL) error {
+// DeleteSCSIDeviceByHCTL deletes scsi device specified by HCTL
+func (s *Scsi) DeleteSCSIDeviceByHCTL(ctx context.Context, h HCTL) error {
 	defer tracer.TraceFuncCall(ctx, "scsi.DeleteSCSIDeviceByHCTL")()
 	return s.deleteSCSIDeviceByHCTL(ctx, h)
 }
 
-func (s *scsi) DeleteSCSIDeviceByName(ctx context.Context, name string) error {
+// DeleteSCSIDeviceByName deletes scsi device specified by name
+func (s *Scsi) DeleteSCSIDeviceByName(ctx context.Context, name string) error {
 	defer tracer.TraceFuncCall(ctx, "scsi.DeleteSCSIDeviceByName")()
 	return s.deleteSCSIDeviceByName(ctx, name)
 }
 
-func (s *scsi) GetDeviceWWN(ctx context.Context, devices []string) (string, error) {
+// GetDeviceWWN fetches device WWN
+func (s *Scsi) GetDeviceWWN(ctx context.Context, devices []string) (string, error) {
 	defer tracer.TraceFuncCall(ctx, "scsi.GetDeviceWWN")()
 	return s.getDeviceWWN(ctx, devices)
 }
@@ -128,37 +139,42 @@ func (s *scsi) GetDevicesByWWN(ctx context.Context, wwn string) ([]string, error
 	return s.getDevicesByWWN(ctx, wwn)
 }
 
-// delete device by specified "device folder" path
+// DeleteSCSIDeviceByPath deletes device by specified "device folder" path
 // Examples:
 // 		/sys/block/sde/device/
 //		/sys/class/scsi_device/37:0:0:1/device/
 //	    /sys/class/iscsi_session/session3/device/target37:0:0/37:0:0:1/
-func (s *scsi) DeleteSCSIDeviceByPath(ctx context.Context, devPath string) error {
+func (s *Scsi) DeleteSCSIDeviceByPath(ctx context.Context, devPath string) error {
 	defer tracer.TraceFuncCall(ctx, "scsi.DeleteSCSIDeviceByPath")()
 	return s.deleteSCSIDeviceByPath(ctx, devPath)
 }
 
-func (s *scsi) GetDMDeviceByChildren(ctx context.Context, devices []string) (string, error) {
+// GetDMDeviceByChildren fetches multipath device name
+func (s *Scsi) GetDMDeviceByChildren(ctx context.Context, devices []string) (string, error) {
 	defer tracer.TraceFuncCall(ctx, "scsi.GetDMDeviceByChildren")()
 	return s.getDMDeviceByChildren(ctx, devices)
 }
 
-func (s *scsi) GetDMChildren(ctx context.Context, dm string) ([]string, error) {
+// GetDMChildren fetches multipath block devices
+func (s *Scsi) GetDMChildren(ctx context.Context, dm string) ([]string, error) {
 	defer tracer.TraceFuncCall(ctx, "scsi.GetDMChildren")()
 	return s.getDMChildren(ctx, dm)
 }
 
-func (s *scsi) CheckDeviceIsValid(ctx context.Context, device string) bool {
+// CheckDeviceIsValid checks if device specified is valid by performing io operation on the device
+func (s *Scsi) CheckDeviceIsValid(ctx context.Context, device string) bool {
 	defer tracer.TraceFuncCall(ctx, "scsi.CheckDeviceIsValid")()
 	return s.checkDeviceIsValid(ctx, device)
 }
 
-func (s *scsi) GetDeviceNameByHCTL(ctx context.Context, h HCTL) (string, error) {
+// GetDeviceNameByHCTL finds scsi device name by HCTL
+func (s *Scsi) GetDeviceNameByHCTL(ctx context.Context, h HCTL) (string, error) {
 	defer tracer.TraceFuncCall(ctx, "scsi.GetDeviceNameByHCTL")()
 	return s.getDeviceNameByHCTL(ctx, h)
 }
 
-func (s *scsi) WaitUdevSymlink(ctx context.Context, deviceName string, wwn string) error {
+// WaitUdevSymlink checks if udev symlink for device specified by device name with WWN is found
+func (s *Scsi) WaitUdevSymlink(ctx context.Context, deviceName string, wwn string) error {
 	defer tracer.TraceFuncCall(ctx, "scsi.WaitUdevSymlink")()
 	return s.waitUdevSymlink(ctx, deviceName, wwn)
 }
@@ -185,19 +201,19 @@ func (s *scsi) rescanSCSIHostByHCTL(ctx context.Context, addr HCTL) error {
 	return scanFile.Close()
 }
 
-func (s *scsi) deleteSCSIDeviceByHCTL(ctx context.Context, h HCTL) error {
+func (s *Scsi) deleteSCSIDeviceByHCTL(ctx context.Context, h HCTL) error {
 	devicePath := fmt.Sprintf("/sys/class/scsi_device/%s:%s:%s:%s/device/",
 		h.Host, h.Channel, h.Target, h.Lun)
 	return s.DeleteSCSIDeviceByPath(ctx, devicePath)
 }
 
-func (s *scsi) deleteSCSIDeviceByName(ctx context.Context, name string) error {
+func (s *Scsi) deleteSCSIDeviceByName(ctx context.Context, name string) error {
 	devicePath := fmt.Sprintf("/sys/class/block/%s/device",
 		name)
 	return s.DeleteSCSIDeviceByPath(ctx, devicePath)
 }
 
-func (s *scsi) getDeviceWWN(ctx context.Context, devices []string) (string, error) {
+func (s *Scsi) getDeviceWWN(ctx context.Context, devices []string) (string, error) {
 	var err error
 	for _, d := range devices {
 		wwidFilePath := fmt.Sprintf("/sys/block/%s/device/wwid", d)
@@ -249,7 +265,7 @@ func (s *scsi) getDeviceWWNWithSCSIID(ctx context.Context, device string) (strin
 	return result, nil
 }
 
-func (s *scsi) readWWIDFile(ctx context.Context, path string) (string, error) {
+func (s *Scsi) readWWIDFile(ctx context.Context, path string) (string, error) {
 	wwnTypes := map[string]string{"t10.": "1", "eui.": "2", "naa.": "3"}
 	data, err := s.fileReader.ReadFile(path)
 	if err == nil {
@@ -269,7 +285,7 @@ func (s *scsi) readWWIDFile(ctx context.Context, path string) (string, error) {
 // 		/sys/block/sde/device/
 //		/sys/class/scsi_device/37:0:0:1/device/
 //	    /sys/class/iscsi_session/session3/device/target37:0:0/37:0:0:1/
-func (s *scsi) deleteSCSIDeviceByPath(ctx context.Context, devPath string) error {
+func (s *Scsi) deleteSCSIDeviceByPath(ctx context.Context, devPath string) error {
 	deletePath := path.Join(devPath, "delete")
 	statePath := path.Join(devPath, "state")
 	// delete command for device in "blocked" state could stuck on 3.x kernel
@@ -302,7 +318,7 @@ func (s *scsi) deleteSCSIDeviceByPath(ctx context.Context, devPath string) error
 	return nil
 }
 
-func (s *scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (string, error) {
+func (s *Scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (string, error) {
 	logger.Info(ctx, "multipath - trying to find multipath DM name")
 
 	pattern := "/sys/block/%s/holders/dm-*"
@@ -336,7 +352,7 @@ func (s *scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (str
 	return "", errors.New("dm not found")
 }
 
-func (s *scsi) getDMChildren(ctx context.Context, dm string) ([]string, error) {
+func (s *Scsi) getDMChildren(ctx context.Context, dm string) ([]string, error) {
 	logger.Info(ctx, "multipath - get block device included in DM")
 	var devices []string
 	pattern := "/sys/block/%s/slaves/*"
@@ -351,7 +367,7 @@ func (s *scsi) getDMChildren(ctx context.Context, dm string) ([]string, error) {
 	return devices, nil
 }
 
-func (s *scsi) getDevicesByWWN(ctx context.Context, wwn string) ([]string, error) {
+func (s *Scsi) getDevicesByWWN(ctx context.Context, wwn string) ([]string, error) {
 	logger.Info(ctx, "get devices by wwn %s", wwn)
 	ret, err, _ := s.singleCall.Do("getDevicesByWWN", func() (interface{}, error) {
 		result := make(map[string][]string)
@@ -388,12 +404,12 @@ func (s *scsi) getDevicesByWWN(ctx context.Context, wwn string) ([]string, error
 	return nil, nil
 }
 
-func (s *scsi) checkExist(ctx context.Context, device string) bool {
+func (s *Scsi) checkExist(ctx context.Context, device string) bool {
 	_, err := s.os.Stat(device)
 	return err == nil
 }
 
-func (s *scsi) checkDeviceIsValid(ctx context.Context, devicePath string) bool {
+func (s *Scsi) checkDeviceIsValid(ctx context.Context, devicePath string) bool {
 	ctx, cancelF := context.WithTimeout(ctx, time.Second*10)
 	defer cancelF()
 	exist := s.checkExist(ctx, devicePath)
@@ -414,7 +430,7 @@ func (s *scsi) checkDeviceIsValid(ctx context.Context, devicePath string) bool {
 	return strings.Index(string(data), "1024") > 0
 }
 
-func (s *scsi) getDeviceNameByHCTL(ctx context.Context, h HCTL) (string, error) {
+func (s *Scsi) getDeviceNameByHCTL(ctx context.Context, h HCTL) (string, error) {
 	logger.Info(ctx, "find scsi device name by HCTL, %s %s %s %s",
 		h.Host, h.Channel, h.Target, h.Lun)
 	if !h.IsFullInfo() {
@@ -442,7 +458,7 @@ func (s *scsi) getDeviceNameByHCTL(ctx context.Context, h HCTL) (string, error) 
 	return devName, nil
 }
 
-func (s *scsi) rescanSCSIDeviceByHCTL(ctx context.Context, h HCTL) error {
+func (s *Scsi) rescanSCSIDeviceByHCTL(ctx context.Context, h HCTL) error {
 	logger.Info(ctx, "rescan scsi device by HCTL, %s %s %s %s",
 		h.Host, h.Channel, h.Target, h.Lun)
 	if !h.IsFullInfo() {
@@ -462,7 +478,7 @@ func (s *scsi) rescanSCSIDeviceByHCTL(ctx context.Context, h HCTL) error {
 	return scanFile.Close()
 }
 
-func (s *scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn string) error {
+func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn string) error {
 	var checkPath string
 	if strings.HasPrefix(deviceName, "dm-") {
 		checkPath = diskByIDDMPath + wwn

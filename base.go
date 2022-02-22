@@ -100,6 +100,33 @@ func (bc *baseConnector) disconnectDevicesByDeviceName(ctx context.Context, name
 	return bc.cleanDevices(ctx, false, devices)
 }
 
+func (bc *baseConnector) disconnectNVMEDevicesByDeviceName(ctx context.Context, name string) error {
+	defer tracer.TraceFuncCall(ctx, "baseConnector.disconnectDevicesByDeviceName")()
+	if !bc.scsi.IsDeviceExist(ctx, name) {
+		logger.Info(ctx, "device %s not found", name)
+		return nil
+	}
+	var err error
+	var wwn string
+	if strings.HasPrefix(name, deviceMapperPrefix) {
+		wwn, err = bc.getDMWWN(ctx, name)
+
+	} else {
+		wwn, err = bc.scsi.GetNVMEDeviceWWN(ctx, []string{name})
+	}
+	if err != nil {
+		logger.Error(ctx, "can't find wwn for device: %s", err.Error())
+		return err
+	}
+
+	devices, err := bc.scsi.GetDevicesByWWN(ctx, wwn)
+	if err != nil {
+		logger.Error(ctx, "failed to find devices by wwn: %s", err.Error())
+		return err
+	}
+	return bc.cleanDevices(ctx, false, devices)
+}
+
 func (bc *baseConnector) cleanDevices(ctx context.Context,
 	force bool, devices []string) error {
 	defer tracer.TraceFuncCall(ctx, "baseConnector.cleanDevices")()

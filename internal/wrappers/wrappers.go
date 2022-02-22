@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/dell/goiscsi"
+	"github.com/dell/gonvme"
 )
 
 // LimitedFileInfo defines limited file info interface
@@ -59,6 +60,17 @@ type ISCSILib interface {
 	PerformLogin(target goiscsi.ISCSITarget) error
 	GetSessions() ([]goiscsi.ISCSISession, error)
 	CreateOrUpdateNode(target goiscsi.ISCSITarget, options map[string]string) error
+}
+
+// NVMeTCP defines NVMe function spec
+type NVMeTCP interface {
+	DiscoverNVMeTCPTargets(address string, login bool) ([]gonvme.NVMeTarget, error)
+	GetInitiators(filename string) ([]string, error)
+	NVMeConnect(target gonvme.NVMeTarget) error
+	NVMeDisconnect(target gonvme.NVMeTarget) error
+	GetSessions() ([]gonvme.NVMESession, error)
+	ListNamespaceDevices() map[string][]string
+	GetNamespaceData(path string, namespaceID string) (string, error)
 }
 
 // wrappers

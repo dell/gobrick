@@ -37,10 +37,11 @@ import (
 )
 
 const (
-	diskByIDPath     = "/dev/disk/by-id/"
-	diskByIDSCSIPath = diskByIDPath + "scsi-"
-	diskByIDDMPath   = diskByIDPath + "dm-uuid-mpath-"
-	scsiIDPath       = "/lib/udev/scsi_id"
+	diskByIDPath       = "/dev/disk/by-id/"
+	diskByIDSCSIPath   = diskByIDPath + "scsi-"
+	diskByIDDMPath     = diskByIDPath + "dm-uuid-mpath-"
+	diskByIDDMPathNVMe = diskByIDPath + "dm-uuid-mpath-eui."
+	scsiIDPath         = "/lib/udev/scsi_id"
 )
 
 // NewSCSI initializes scsi struct
@@ -128,7 +129,13 @@ func (s *Scsi) GetDeviceWWN(ctx context.Context, devices []string) (string, erro
 	return s.getDeviceWWN(ctx, devices)
 }
 
-// GetDevicesByWWN fetches device by WWN
+// GetNVMEDeviceWWN gets wwn of nvme device
+func (s *Scsi) GetNVMEDeviceWWN(ctx context.Context, devices []string) (string, error) {
+	defer tracer.TraceFuncCall(ctx, "scsi.GetNVMEDeviceWWN")()
+	return s.getNVMEDeviceWWN(ctx, devices)
+}
+
+// GetDevicesByWWN fetches devices by wwn
 func (s *Scsi) GetDevicesByWWN(ctx context.Context, wwn string) ([]string, error) {
 	defer tracer.TraceFuncCall(ctx, "scsi.GetDevicesByWWN")()
 	return s.getDevicesByWWN(ctx, wwn)
@@ -174,6 +181,12 @@ func (s *Scsi) WaitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 	return s.waitUdevSymlink(ctx, deviceName, wwn)
 }
 
+// WaitUdevSymlinkNVMe checks if udev symlink for device specified by device name with WWN is found for nvme
+func (s *Scsi) WaitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error {
+	defer tracer.TraceFuncCall(ctx, "scsi.WaitUdevSymlinkNVMe")()
+	return s.waitUdevSymlinkNVMe(ctx, deviceName, wwn)
+}
+
 func (s *Scsi) rescanSCSIHostByHCTL(ctx context.Context, addr HCTL) error {
 	hostsDir := "/sys/class/scsi_host"
 	filePath := fmt.Sprintf("%s/host%s/scan", hostsDir, addr.Host)
@@ -207,6 +220,23 @@ func (s *Scsi) getDeviceWWN(ctx context.Context, devices []string) (string, erro
 	var err error
 	for _, d := range devices {
 		wwidFilePath := fmt.Sprintf("/sys/block/%s/device/wwid", d)
+		var result string
+		result, err = s.readWWIDFile(ctx, wwidFilePath)
+		if err == nil {
+			return result, nil
+		} else if s.os.IsNotExist(err) {
+			if result, err = s.getDeviceWWNWithSCSIID(ctx, d); err == nil {
+				return result, nil
+			}
+		}
+	}
+	return "", err
+}
+
+func (s *Scsi) getNVMEDeviceWWN(ctx context.Context, devices []string) (string, error) {
+	var err error
+	for _, d := range devices {
+		wwidFilePath := fmt.Sprintf("/sys/block/%s/wwid", d)
 		var result string
 		result, err = s.readWWIDFile(ctx, wwidFilePath)
 		if err == nil {
@@ -467,6 +497,28 @@ func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 	if d := strings.Replace(symlink, "/dev/", "", 1); d != deviceName {
 		msg := fmt.Sprintf("udev symlink point to unexpected device: %s", d)
 		logger.Info(ctx, msg)
+		return errors.New(msg)
+	}
+	logger.Info(ctx, "udev symlink for %s with WWN %s found", deviceName, wwn)
+	return nil
+}
+
+func (s *Scsi) waitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error {
+	var checkPath string
+	if strings.HasPrefix(deviceName, "dm-") {
+		checkPath = diskByIDDMPathNVMe + wwn
+	} else {
+		checkPath = diskByIDSCSIPath + wwn
+	}
+	symlink, err := s.filePath.EvalSymlinks(checkPath)
+	if err != nil {
+		msg := fmt.Sprintf("symlink for path %s not found: %s", checkPath, err.Error())
+		logger.Error(ctx, msg)
+		return errors.New(msg)
+	}
+	if d := strings.Replace(symlink, "/dev/", "", 1); d != deviceName {
+		msg := fmt.Sprintf("udev symlink point to unexpected device: %s", d)
+		logger.Error(ctx, msg)
 		return errors.New(msg)
 	}
 	logger.Info(ctx, "udev symlink for %s with WWN %s found", deviceName, wwn)

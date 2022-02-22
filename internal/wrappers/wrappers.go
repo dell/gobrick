@@ -62,6 +62,7 @@ type ISCSILib interface {
 	CreateOrUpdateNode(target goiscsi.ISCSITarget, options map[string]string) error
 }
 
+// NVMeTCP defines NVMe function spec
 type NVMeTCP interface {
 	DiscoverNVMeTCPTargets(address string, login bool) ([]gonvme.NVMeTarget, error)
 	GetInitiators(filename string) ([]string, error)

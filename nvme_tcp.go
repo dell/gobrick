@@ -43,6 +43,7 @@ const (
 	NVMeWaitDeviceTimeoutDefault         = time.Second * 30
 	NVMeWaitDeviceRegisterTimeoutDefault = time.Second * 10
 	NVMeMaxParallelOperationsDefault     = 5
+	NVMePortDefault                      = ":4420"
 )
 
 type NVMeTCPConnectorParams struct {
@@ -232,7 +233,7 @@ func (c *NVMeTCPConnector) GetInitiatorName(ctx context.Context) ([]string, erro
 func addDefaultNVMeTCPPortToVolumeInfoPortals(info *NVMeTCPVolumeInfo) {
 	for i, t := range info.Targets {
 		if !strings.Contains(t.Portal, ":") {
-			info.Targets[i].Portal += ":4420"
+			info.Targets[i].Portal += NVMePortDefault
 		}
 	}
 }
@@ -258,7 +259,7 @@ func (c *NVMeTCPConnector) cleanConnection(ctx context.Context, force bool, info
 	return c.baseConnector.cleanDevices(ctx, force, devices)
 }
 
-func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeVolumeInfo) (Device, error) {
+func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeTCPVolumeInfo) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.connectSingleDevice")()
 	devCH := make(chan string, 1)
 	wg := sync.WaitGroup{}
@@ -303,7 +304,7 @@ func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeVol
 			var err error
 			wwn, err = c.scsi.GetDeviceWWN(ctx, devices)
 			if err != nil {
-				logger.Error(ctx, "wwn for devices %s not found", devices)
+				logger.Debug(ctx, "wwn for devices %s not found", devices)
 			}
 		}
 		if wwn != "" {

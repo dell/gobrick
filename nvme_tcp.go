@@ -40,12 +40,20 @@ import (
 )
 
 const (
-	NVMeWaitDeviceTimeoutDefault         = time.Second * 30
+	// NVMeWaitDeviceTimeoutDefault - NVMe default device time out
+	NVMeWaitDeviceTimeoutDefault = time.Second * 30
+
+	// NVMeWaitDeviceRegisterTimeoutDefault - NVMe default device register timeout
 	NVMeWaitDeviceRegisterTimeoutDefault = time.Second * 10
-	NVMeMaxParallelOperationsDefault     = 5
-	NVMePortDefault                      = ":4420"
+
+	// NVMeMaxParallelOperationsDefault - max parallen NVMe operations
+	NVMeMaxParallelOperationsDefault = 5
+
+	// NVMePortDefault - NVMe TCP port
+	NVMePortDefault = ":4420"
 )
 
+// NVMeTCPConnectorParams - type definition for NVMe TCP connector params
 type NVMeTCPConnectorParams struct {
 	// nvmeLib command will run from this chroot
 	Chroot string
@@ -62,6 +70,7 @@ type NVMeTCPConnectorParams struct {
 	MaxParallelOperations int
 }
 
+// DevicePathResult - placeholder for nvme devicepaths
 type DevicePathResult struct {
 	devicePaths []string
 	nguid       string
@@ -108,6 +117,7 @@ func NewNVMeTCPConnector(params NVMeTCPConnectorParams) *NVMeTCPConnector {
 	return conn
 }
 
+// NVMeTCPConnector - type defenition for NVMe connector
 type NVMeTCPConnector struct {
 	baseConnector *baseConnector
 	multipath     intmultipath.Multipath
@@ -117,9 +127,8 @@ type NVMeTCPConnector struct {
 	manualSessionManagement bool
 
 	// timeouts
-	waitDeviceTimeout                      time.Duration
-	waitDeviceRegisterTimeout              time.Duration
-	failedSessionMinimumLoginRetryInterval time.Duration
+	waitDeviceTimeout         time.Duration
+	waitDeviceRegisterTimeout time.Duration
 
 	loginLock  *rateLock
 	limiter    *semaphore.Weighted
@@ -129,11 +138,13 @@ type NVMeTCPConnector struct {
 	filePath wrp.LimitedFilepath
 }
 
+// NVMeTCPTargetInfo - Placeholder for NVMe targets
 type NVMeTCPTargetInfo struct {
 	Portal string
 	Target string
 }
 
+// NVMeTCPVolumeInfo - placeholder for NVMe TCP volume
 type NVMeTCPVolumeInfo struct {
 	Targets []NVMeTCPTargetInfo
 	WWN     string
@@ -245,7 +256,7 @@ func (c *NVMeTCPConnector) cleanConnection(ctx context.Context, force bool, info
 
 	namespaceDevices := c.nvmeTCPLib.ListNamespaceDevices()
 
-	for devicePath, _ := range namespaceDevices {
+	for devicePath := range namespaceDevices {
 		for _, namespace := range namespaceDevices[devicePath] {
 			nguid, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespace)
 			if c.wwnMatches(nguid, wwn) {
@@ -449,7 +460,7 @@ func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGrou
 
 	var devicePaths []string
 	nguidResult := ""
-	for devicePath, _ := range namespaceDevices {
+	for devicePath := range namespaceDevices {
 		for _, namespace := range namespaceDevices[devicePath] {
 			nguid, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespace)
 			if c.wwnMatches(nguid, wwn) {

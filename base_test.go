@@ -54,7 +54,7 @@ func (bmh *baseMockHelper) MultipathAddWWIDOK(
 
 func (bmh *baseMockHelper) MultipathAddWWIDErr(
 	m *intmultipath.MockMultipath) *gomock.Call {
-	return bmh.MultipathAddWWIDCall(m).Return(mh.TestErr)
+	return bmh.MultipathAddWWIDCall(m).Return(mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) MultipathAddPathCall(
@@ -69,7 +69,7 @@ func (bmh *baseMockHelper) MultipathAddPathOK(
 
 func (bmh *baseMockHelper) MultipathAddPathErr(
 	m *intmultipath.MockMultipath) *gomock.Call {
-	return bmh.MultipathAddPathCall(m).Return(mh.TestErr)
+	return bmh.MultipathAddPathCall(m).Return(mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) MultipathDelPathCall(
@@ -84,7 +84,7 @@ func (bmh *baseMockHelper) MultipathDelPathOK(
 
 func (bmh *baseMockHelper) MultipathDelPathErr(
 	m *intmultipath.MockMultipath) *gomock.Call {
-	return bmh.MultipathDelPathCall(m).Return(mh.TestErr)
+	return bmh.MultipathDelPathCall(m).Return(mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) MultipathFlushDeviceCall(
@@ -99,7 +99,7 @@ func (bmh *baseMockHelper) MultipathFlushDeviceOK(
 
 func (bmh *baseMockHelper) MultipathFlushDeviceErr(
 	m *intmultipath.MockMultipath) *gomock.Call {
-	return bmh.MultipathFlushDeviceCall(m).Return(mh.TestErr)
+	return bmh.MultipathFlushDeviceCall(m).Return(mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) MultipathIsDaemonRunningCall(
@@ -124,7 +124,7 @@ func (bmh *baseMockHelper) MultipathGetDMWWIDOK(
 
 func (bmh *baseMockHelper) MultipathGetDMWWIDErr(
 	m *intmultipath.MockMultipath) *gomock.Call {
-	return bmh.MultipathGetDMWWIDCall(m).Return("", mh.TestErr)
+	return bmh.MultipathGetDMWWIDCall(m).Return("", mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) SCSIIsDeviceExistCall(
@@ -149,7 +149,7 @@ func (bmh *baseMockHelper) SCSIRescanSCSIHostByHCTLOK(
 
 func (bmh *baseMockHelper) SCSIRescanSCSIHostByHCTLErr(
 	m *intscsi.MockSCSI) *gomock.Call {
-	return bmh.SCSIRescanSCSIHostByHCTLCall(m).Return(mh.TestErr)
+	return bmh.SCSIRescanSCSIHostByHCTLCall(m).Return(mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) SCSIRescanSCSIDeviceByHCTLCall(
@@ -164,7 +164,7 @@ func (bmh *baseMockHelper) SCSIRescanSCSIDeviceByHCTLOK(
 
 func (bmh *baseMockHelper) SCSIRescanSCSIDeviceByHCTLErr(
 	m *intscsi.MockSCSI) *gomock.Call {
-	return bmh.SCSIRescanSCSIDeviceByHCTLCall(m).Return(mh.TestErr)
+	return bmh.SCSIRescanSCSIDeviceByHCTLCall(m).Return(mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) SCSIDeleteSCSIDeviceByHCTLCall(
@@ -179,7 +179,7 @@ func (bmh *baseMockHelper) SCSIDeleteSCSIDeviceByHCTLOK(
 
 func (bmh *baseMockHelper) SCSIDeleteSCSIDeviceByHCTLErr(
 	m *intscsi.MockSCSI) *gomock.Call {
-	return bmh.SCSIDeleteSCSIDeviceByHCTLCall(m).Return(mh.TestErr)
+	return bmh.SCSIDeleteSCSIDeviceByHCTLCall(m).Return(mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) SCSIDeleteSCSIDeviceByNameCall(
@@ -194,7 +194,7 @@ func (bmh *baseMockHelper) SCSIDeleteSCSIDeviceByNameOK(
 
 func (bmh *baseMockHelper) SCSIDeleteSCSIDeviceByNameErr(
 	m *intscsi.MockSCSI) *gomock.Call {
-	return bmh.SCSIDeleteSCSIDeviceByNameCall(m).Return(mh.TestErr)
+	return bmh.SCSIDeleteSCSIDeviceByNameCall(m).Return(mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) SCSIDeleteSCSIDeviceByPathCall(
@@ -209,7 +209,7 @@ func (bmh *baseMockHelper) SCSIDeleteSCSIDeviceByPathOK(
 
 func (bmh *baseMockHelper) SCSIDeleteSCSIDeviceByPathErr(
 	m *intscsi.MockSCSI) *gomock.Call {
-	return bmh.SCSIDeleteSCSIDeviceByPathCall(m).Return(mh.TestErr)
+	return bmh.SCSIDeleteSCSIDeviceByPathCall(m).Return(mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) SCSIGetDeviceWWNCall(
@@ -224,7 +224,7 @@ func (bmh *baseMockHelper) SCSIGetDeviceWWNOK(
 
 func (bmh *baseMockHelper) SCSIGetDeviceWWNErr(
 	m *intscsi.MockSCSI) *gomock.Call {
-	return bmh.SCSIGetDeviceWWNCall(m).Return("", mh.TestErr)
+	return bmh.SCSIGetDeviceWWNCall(m).Return("", mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) SCSIGetDevicesByWWNCall(
@@ -239,7 +239,7 @@ func (bmh *baseMockHelper) SCSIGetDevicesByWWNOK(
 
 func (bmh *baseMockHelper) SCSIGetDevicesByWWNErr(
 	m *intscsi.MockSCSI) *gomock.Call {
-	return bmh.SCSIGetDevicesByWWNCall(m).Return(nil, mh.TestErr)
+	return bmh.SCSIGetDevicesByWWNCall(m).Return(nil, mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) SCSIGetDMDeviceByChildrenCall(
@@ -254,7 +254,7 @@ func (bmh *baseMockHelper) SCSIGetDMDeviceByChildrenOK(
 
 func (bmh *baseMockHelper) SCSIGetDMDeviceByChildrenErr(
 	m *intscsi.MockSCSI) *gomock.Call {
-	return bmh.SCSIGetDMDeviceByChildrenCall(m).Return("", mh.TestErr)
+	return bmh.SCSIGetDMDeviceByChildrenCall(m).Return("", mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) SCSIGetDMChildrenCall(
@@ -267,7 +267,7 @@ func (bmh *baseMockHelper) SCSIGetDMChildrenOK(
 }
 func (bmh *baseMockHelper) SCSIGetDMChildrenErr(
 	m *intscsi.MockSCSI) *gomock.Call {
-	return bmh.SCSIGetDMChildrenCall(m).Return(nil, mh.TestErr)
+	return bmh.SCSIGetDMChildrenCall(m).Return(nil, mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) SCSICheckDeviceIsValidCall(
@@ -292,7 +292,7 @@ func (bmh *baseMockHelper) SCSIGetDeviceNameByHCTLOK(
 
 func (bmh *baseMockHelper) SCSIGetDeviceNameByHCTLErr(
 	m *intscsi.MockSCSI) *gomock.Call {
-	return bmh.SCSIGetDeviceNameByHCTLCall(m).Return("", mh.TestErr)
+	return bmh.SCSIGetDeviceNameByHCTLCall(m).Return("", mh.ErrTest)
 }
 
 func (bmh *baseMockHelper) SCSIWaitUdevSymlinkCall(
@@ -308,7 +308,7 @@ func (bmh *baseMockHelper) SCSIWaitUdevSymlinkOK(
 
 func (bmh *baseMockHelper) SCSIWaitUdevSymlinkErr(
 	m *intscsi.MockSCSI) *gomock.Call {
-	return bmh.SCSIWaitUdevSymlinkCall(m).Return(mh.TestErr)
+	return bmh.SCSIWaitUdevSymlinkCall(m).Return(mh.ErrTest)
 }
 
 func BaseConnectorCleanDeviceMock(mock *baseMockHelper,

@@ -2,11 +2,11 @@ package gobrick
 
 import (
 	"context"
+	"fmt"
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/mockhelper"
 	"github.com/dell/gobrick/internal/tracer"
 	"github.com/dell/gobrick/pkg/scsi"
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"

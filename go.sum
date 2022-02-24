@@ -7,6 +7,8 @@ github.com/dell/gonvme v0.0.0-20220217061253-306d51e093bd h1:eA/UOAcQnQSzC7yGF+t
 github.com/dell/gonvme v0.0.0-20220217061253-306d51e093bd/go.mod h1:JXLmgxE/2dsiXqW5E+kH5Zo11lOjCuHyiHu92xqR9O0=
 github.com/dell/gonvme v0.0.0-20220224060134-c0b7f420e4e0 h1:hhaNM3bNAPAqGe1afMZl31kM1E4MNBo336UVxX2n0+A=
 github.com/dell/gonvme v0.0.0-20220224060134-c0b7f420e4e0/go.mod h1:JXLmgxE/2dsiXqW5E+kH5Zo11lOjCuHyiHu92xqR9O0=
+github.com/dell/gonvme v0.0.0-20220224072409-dcb82cef802a h1:VbnFMQoJ0XYCwQbCktQlkqyrpBKaQu/vyXs8Ss5KSGQ=
+github.com/dell/gonvme v0.0.0-20220224072409-dcb82cef802a/go.mod h1:JXLmgxE/2dsiXqW5E+kH5Zo11lOjCuHyiHu92xqR9O0=
 github.com/golang/mock v1.3.1 h1:qGJ6qTW+x6xX/my+8YUVl4WNpX9B7+/l2tRsHGZ7f2s=
 github.com/golang/mock v1.3.1/go.mod h1:sBzyDLLjw3U8JLTeZvSv8jJB+tU5PVekmnlKIyFUx0Y=
 github.com/golang/mock v1.6.0 h1:ErTB+efbowRARo13NNdxyJji2egdxLGQhRaY+DUumQc=

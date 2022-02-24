@@ -258,11 +258,11 @@ func (c *NVMeTCPConnector) cleanConnection(ctx context.Context, force bool, info
 	var devicePath string
 	var namespace string
 
-	for DevicePathAndNamespace, _ := range DevicePathsAndNamespaces {
+	for DevicePathAndNamespace := range DevicePathsAndNamespaces {
 		devicePath = DevicePathAndNamespace.DevicePath
 		namespace = DevicePathAndNamespace.Namespace
-		for _, namespaceId := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
-			nguid, newnamespace, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespaceId)
+		for _, namespaceID := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
+			nguid, newnamespace, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespaceID)
 
 			if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
 				devices = append(devices, devicePath)
@@ -469,13 +469,13 @@ func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGrou
 
 	nguidResult := ""
 
-	for DevicePathAndNamespace, _ := range DevicePathsAndNamespaces {
+	for DevicePathAndNamespace := range DevicePathsAndNamespaces {
 
 		devicePath = DevicePathAndNamespace.DevicePath
 		namespace = DevicePathAndNamespace.Namespace
 
-		for _, namespaceId := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
-			nguid, newnamespace, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespaceId)
+		for _, namespaceID := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
+			nguid, newnamespace, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespaceID)
 
 			if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
 				devicePaths = append(devicePaths, devicePath)

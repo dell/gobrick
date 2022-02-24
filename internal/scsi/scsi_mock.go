@@ -6,77 +6,50 @@ package scsi
 
 import (
 	context "context"
+	reflect "reflect"
+
 	scsi "github.com/dell/gobrick/pkg/scsi"
 	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
 )
 
-// MockSCSI is a mock of SCSI interface
+// MockSCSI is a mock of SCSI interface.
 type MockSCSI struct {
 	ctrl     *gomock.Controller
 	recorder *MockSCSIMockRecorder
 }
 
-// MockSCSIMockRecorder is the mock recorder for MockSCSI
+// MockSCSIMockRecorder is the mock recorder for MockSCSI.
 type MockSCSIMockRecorder struct {
 	mock *MockSCSI
 }
 
-// NewMockSCSI creates a new mock instance
+// NewMockSCSI creates a new mock instance.
 func NewMockSCSI(ctrl *gomock.Controller) *MockSCSI {
 	mock := &MockSCSI{ctrl: ctrl}
 	mock.recorder = &MockSCSIMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockSCSI) EXPECT() *MockSCSIMockRecorder {
 	return m.recorder
 }
 
-// IsDeviceExist mocks base method
-func (m *MockSCSI) IsDeviceExist(ctx context.Context, device string) bool {
+// CheckDeviceIsValid mocks base method.
+func (m *MockSCSI) CheckDeviceIsValid(ctx context.Context, device string) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsDeviceExist", ctx, device)
+	ret := m.ctrl.Call(m, "CheckDeviceIsValid", ctx, device)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
-// IsDeviceExist indicates an expected call of IsDeviceExist
-func (mr *MockSCSIMockRecorder) IsDeviceExist(ctx, device interface{}) *gomock.Call {
+// CheckDeviceIsValid indicates an expected call of CheckDeviceIsValid.
+func (mr *MockSCSIMockRecorder) CheckDeviceIsValid(ctx, device interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDeviceExist", reflect.TypeOf((*MockSCSI)(nil).IsDeviceExist), ctx, device)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDeviceIsValid", reflect.TypeOf((*MockSCSI)(nil).CheckDeviceIsValid), ctx, device)
 }
 
-// RescanSCSIHostByHCTL mocks base method
-func (m *MockSCSI) RescanSCSIHostByHCTL(ctx context.Context, h scsi.HCTL) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RescanSCSIHostByHCTL", ctx, h)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// RescanSCSIHostByHCTL indicates an expected call of RescanSCSIHostByHCTL
-func (mr *MockSCSIMockRecorder) RescanSCSIHostByHCTL(ctx, h interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RescanSCSIHostByHCTL", reflect.TypeOf((*MockSCSI)(nil).RescanSCSIHostByHCTL), ctx, h)
-}
-
-// RescanSCSIDeviceByHCTL mocks base method
-func (m *MockSCSI) RescanSCSIDeviceByHCTL(ctx context.Context, h scsi.HCTL) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RescanSCSIDeviceByHCTL", ctx, h)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// RescanSCSIDeviceByHCTL indicates an expected call of RescanSCSIDeviceByHCTL
-func (mr *MockSCSIMockRecorder) RescanSCSIDeviceByHCTL(ctx, h interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RescanSCSIDeviceByHCTL", reflect.TypeOf((*MockSCSI)(nil).RescanSCSIDeviceByHCTL), ctx, h)
-}
-
-// DeleteSCSIDeviceByHCTL mocks base method
+// DeleteSCSIDeviceByHCTL mocks base method.
 func (m *MockSCSI) DeleteSCSIDeviceByHCTL(ctx context.Context, h scsi.HCTL) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteSCSIDeviceByHCTL", ctx, h)
@@ -84,13 +57,13 @@ func (m *MockSCSI) DeleteSCSIDeviceByHCTL(ctx context.Context, h scsi.HCTL) erro
 	return ret0
 }
 
-// DeleteSCSIDeviceByHCTL indicates an expected call of DeleteSCSIDeviceByHCTL
+// DeleteSCSIDeviceByHCTL indicates an expected call of DeleteSCSIDeviceByHCTL.
 func (mr *MockSCSIMockRecorder) DeleteSCSIDeviceByHCTL(ctx, h interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSCSIDeviceByHCTL", reflect.TypeOf((*MockSCSI)(nil).DeleteSCSIDeviceByHCTL), ctx, h)
 }
 
-// DeleteSCSIDeviceByName mocks base method
+// DeleteSCSIDeviceByName mocks base method.
 func (m *MockSCSI) DeleteSCSIDeviceByName(ctx context.Context, name string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteSCSIDeviceByName", ctx, name)
@@ -98,13 +71,13 @@ func (m *MockSCSI) DeleteSCSIDeviceByName(ctx context.Context, name string) erro
 	return ret0
 }
 
-// DeleteSCSIDeviceByName indicates an expected call of DeleteSCSIDeviceByName
+// DeleteSCSIDeviceByName indicates an expected call of DeleteSCSIDeviceByName.
 func (mr *MockSCSIMockRecorder) DeleteSCSIDeviceByName(ctx, name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSCSIDeviceByName", reflect.TypeOf((*MockSCSI)(nil).DeleteSCSIDeviceByName), ctx, name)
 }
 
-// DeleteSCSIDeviceByPath mocks base method
+// DeleteSCSIDeviceByPath mocks base method.
 func (m *MockSCSI) DeleteSCSIDeviceByPath(ctx context.Context, devPath string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteSCSIDeviceByPath", ctx, devPath)
@@ -112,58 +85,13 @@ func (m *MockSCSI) DeleteSCSIDeviceByPath(ctx context.Context, devPath string) e
 	return ret0
 }
 
-// DeleteSCSIDeviceByPath indicates an expected call of DeleteSCSIDeviceByPath
+// DeleteSCSIDeviceByPath indicates an expected call of DeleteSCSIDeviceByPath.
 func (mr *MockSCSIMockRecorder) DeleteSCSIDeviceByPath(ctx, devPath interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSCSIDeviceByPath", reflect.TypeOf((*MockSCSI)(nil).DeleteSCSIDeviceByPath), ctx, devPath)
 }
 
-// GetDeviceWWN mocks base method
-func (m *MockSCSI) GetDeviceWWN(ctx context.Context, devices []string) (string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDeviceWWN", ctx, devices)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetDeviceWWN indicates an expected call of GetDeviceWWN
-func (mr *MockSCSIMockRecorder) GetDeviceWWN(ctx, devices interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeviceWWN", reflect.TypeOf((*MockSCSI)(nil).GetDeviceWWN), ctx, devices)
-}
-
-// GetDevicesByWWN mocks base method
-func (m *MockSCSI) GetDevicesByWWN(ctx context.Context, wwn string) ([]string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDevicesByWWN", ctx, wwn)
-	ret0, _ := ret[0].([]string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetDevicesByWWN indicates an expected call of GetDevicesByWWN
-func (mr *MockSCSIMockRecorder) GetDevicesByWWN(ctx, wwn interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDevicesByWWN", reflect.TypeOf((*MockSCSI)(nil).GetDevicesByWWN), ctx, wwn)
-}
-
-// GetDMDeviceByChildren mocks base method
-func (m *MockSCSI) GetDMDeviceByChildren(ctx context.Context, devices []string) (string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDMDeviceByChildren", ctx, devices)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetDMDeviceByChildren indicates an expected call of GetDMDeviceByChildren
-func (mr *MockSCSIMockRecorder) GetDMDeviceByChildren(ctx, devices interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDMDeviceByChildren", reflect.TypeOf((*MockSCSI)(nil).GetDMDeviceByChildren), ctx, devices)
-}
-
-// GetDMChildren mocks base method
+// GetDMChildren mocks base method.
 func (m *MockSCSI) GetDMChildren(ctx context.Context, dmPath string) ([]string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDMChildren", ctx, dmPath)
@@ -172,27 +100,28 @@ func (m *MockSCSI) GetDMChildren(ctx context.Context, dmPath string) ([]string, 
 	return ret0, ret1
 }
 
-// GetDMChildren indicates an expected call of GetDMChildren
+// GetDMChildren indicates an expected call of GetDMChildren.
 func (mr *MockSCSIMockRecorder) GetDMChildren(ctx, dmPath interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDMChildren", reflect.TypeOf((*MockSCSI)(nil).GetDMChildren), ctx, dmPath)
 }
 
-// CheckDeviceIsValid mocks base method
-func (m *MockSCSI) CheckDeviceIsValid(ctx context.Context, device string) bool {
+// GetDMDeviceByChildren mocks base method.
+func (m *MockSCSI) GetDMDeviceByChildren(ctx context.Context, devices []string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CheckDeviceIsValid", ctx, device)
-	ret0, _ := ret[0].(bool)
-	return ret0
+	ret := m.ctrl.Call(m, "GetDMDeviceByChildren", ctx, devices)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// CheckDeviceIsValid indicates an expected call of CheckDeviceIsValid
-func (mr *MockSCSIMockRecorder) CheckDeviceIsValid(ctx, device interface{}) *gomock.Call {
+// GetDMDeviceByChildren indicates an expected call of GetDMDeviceByChildren.
+func (mr *MockSCSIMockRecorder) GetDMDeviceByChildren(ctx, devices interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckDeviceIsValid", reflect.TypeOf((*MockSCSI)(nil).CheckDeviceIsValid), ctx, device)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDMDeviceByChildren", reflect.TypeOf((*MockSCSI)(nil).GetDMDeviceByChildren), ctx, devices)
 }
 
-// GetDeviceNameByHCTL mocks base method
+// GetDeviceNameByHCTL mocks base method.
 func (m *MockSCSI) GetDeviceNameByHCTL(ctx context.Context, h scsi.HCTL) (string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDeviceNameByHCTL", ctx, h)
@@ -201,13 +130,100 @@ func (m *MockSCSI) GetDeviceNameByHCTL(ctx context.Context, h scsi.HCTL) (string
 	return ret0, ret1
 }
 
-// GetDeviceNameByHCTL indicates an expected call of GetDeviceNameByHCTL
+// GetDeviceNameByHCTL indicates an expected call of GetDeviceNameByHCTL.
 func (mr *MockSCSIMockRecorder) GetDeviceNameByHCTL(ctx, h interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeviceNameByHCTL", reflect.TypeOf((*MockSCSI)(nil).GetDeviceNameByHCTL), ctx, h)
 }
 
-// WaitUdevSymlink mocks base method
+// GetDeviceWWN mocks base method.
+func (m *MockSCSI) GetDeviceWWN(ctx context.Context, devices []string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDeviceWWN", ctx, devices)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDeviceWWN indicates an expected call of GetDeviceWWN.
+func (mr *MockSCSIMockRecorder) GetDeviceWWN(ctx, devices interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDeviceWWN", reflect.TypeOf((*MockSCSI)(nil).GetDeviceWWN), ctx, devices)
+}
+
+// GetDevicesByWWN mocks base method.
+func (m *MockSCSI) GetDevicesByWWN(ctx context.Context, wwn string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDevicesByWWN", ctx, wwn)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDevicesByWWN indicates an expected call of GetDevicesByWWN.
+func (mr *MockSCSIMockRecorder) GetDevicesByWWN(ctx, wwn interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDevicesByWWN", reflect.TypeOf((*MockSCSI)(nil).GetDevicesByWWN), ctx, wwn)
+}
+
+// GetNVMEDeviceWWN mocks base method.
+func (m *MockSCSI) GetNVMEDeviceWWN(ctx context.Context, devices []string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNVMEDeviceWWN", ctx, devices)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNVMEDeviceWWN indicates an expected call of GetNVMEDeviceWWN.
+func (mr *MockSCSIMockRecorder) GetNVMEDeviceWWN(ctx, devices interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNVMEDeviceWWN", reflect.TypeOf((*MockSCSI)(nil).GetNVMEDeviceWWN), ctx, devices)
+}
+
+// IsDeviceExist mocks base method.
+func (m *MockSCSI) IsDeviceExist(ctx context.Context, device string) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsDeviceExist", ctx, device)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsDeviceExist indicates an expected call of IsDeviceExist.
+func (mr *MockSCSIMockRecorder) IsDeviceExist(ctx, device interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDeviceExist", reflect.TypeOf((*MockSCSI)(nil).IsDeviceExist), ctx, device)
+}
+
+// RescanSCSIDeviceByHCTL mocks base method.
+func (m *MockSCSI) RescanSCSIDeviceByHCTL(ctx context.Context, h scsi.HCTL) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RescanSCSIDeviceByHCTL", ctx, h)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RescanSCSIDeviceByHCTL indicates an expected call of RescanSCSIDeviceByHCTL.
+func (mr *MockSCSIMockRecorder) RescanSCSIDeviceByHCTL(ctx, h interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RescanSCSIDeviceByHCTL", reflect.TypeOf((*MockSCSI)(nil).RescanSCSIDeviceByHCTL), ctx, h)
+}
+
+// RescanSCSIHostByHCTL mocks base method.
+func (m *MockSCSI) RescanSCSIHostByHCTL(ctx context.Context, h scsi.HCTL) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RescanSCSIHostByHCTL", ctx, h)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RescanSCSIHostByHCTL indicates an expected call of RescanSCSIHostByHCTL.
+func (mr *MockSCSIMockRecorder) RescanSCSIHostByHCTL(ctx, h interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RescanSCSIHostByHCTL", reflect.TypeOf((*MockSCSI)(nil).RescanSCSIHostByHCTL), ctx, h)
+}
+
+// WaitUdevSymlink mocks base method.
 func (m *MockSCSI) WaitUdevSymlink(ctx context.Context, deviceName, wwn string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitUdevSymlink", ctx, deviceName, wwn)
@@ -215,8 +231,22 @@ func (m *MockSCSI) WaitUdevSymlink(ctx context.Context, deviceName, wwn string) 
 	return ret0
 }
 
-// WaitUdevSymlink indicates an expected call of WaitUdevSymlink
+// WaitUdevSymlink indicates an expected call of WaitUdevSymlink.
 func (mr *MockSCSIMockRecorder) WaitUdevSymlink(ctx, deviceName, wwn interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitUdevSymlink", reflect.TypeOf((*MockSCSI)(nil).WaitUdevSymlink), ctx, deviceName, wwn)
+}
+
+// WaitUdevSymlinkNVMe mocks base method.
+func (m *MockSCSI) WaitUdevSymlinkNVMe(ctx context.Context, deviceName, wwn string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitUdevSymlinkNVMe", ctx, deviceName, wwn)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WaitUdevSymlinkNVMe indicates an expected call of WaitUdevSymlinkNVMe.
+func (mr *MockSCSIMockRecorder) WaitUdevSymlinkNVMe(ctx, deviceName, wwn interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitUdevSymlinkNVMe", reflect.TypeOf((*MockSCSI)(nil).WaitUdevSymlinkNVMe), ctx, deviceName, wwn)
 }

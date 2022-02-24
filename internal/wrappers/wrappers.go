@@ -69,8 +69,8 @@ type NVMeTCP interface {
 	NVMeConnect(target gonvme.NVMeTarget) error
 	NVMeDisconnect(target gonvme.NVMeTarget) error
 	GetSessions() ([]gonvme.NVMESession, error)
-	ListNamespaceDevices() map[string][]string
-	GetNamespaceData(path string, namespaceID string) (string, error)
+	ListNamespaceDevices() map[gonvme.DevicePathAndNamespace][]string
+	GetNamespaceData(path string, namespaceID string) (string, string, error)
 }
 
 // wrappers

@@ -36,6 +36,7 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+// constants
 const (
 	diskByIDPath           = "/dev/disk/by-id/"
 	diskByIDSCSIPath       = diskByIDPath + "scsi-"
@@ -364,6 +365,7 @@ func (s *Scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (str
 	return "", errors.New("dm not found")
 }
 
+//GetNVMEMultipathDMName finds the multipath DM mame for NVMe
 func (s *Scsi) GetNVMEMultipathDMName(device string, pattern string) ([]string, error) {
 
 	var retryCount = 0
@@ -560,6 +562,7 @@ func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 	return nil
 }
 
+//GetNVMESymlink return the NVMe symlink for the given path
 func (s *Scsi) GetNVMESymlink(checkPath string) (string, error) {
 
 	var retryCount = 1

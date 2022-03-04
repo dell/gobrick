@@ -101,7 +101,7 @@ func (bc *baseConnector) disconnectDevicesByDeviceName(ctx context.Context, name
 }
 
 func (bc *baseConnector) disconnectNVMEDevicesByDeviceName(ctx context.Context, name string) error {
-	defer tracer.TraceFuncCall(ctx, "baseConnector.disconnectDevicesByDeviceName")()
+	defer tracer.TraceFuncCall(ctx, "baseConnector.disconnectNVMEDevicesByDeviceName")()
 	if !bc.scsi.IsDeviceExist(ctx, name) {
 		logger.Info(ctx, "device %s not found", name)
 		return nil

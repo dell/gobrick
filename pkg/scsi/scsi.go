@@ -42,6 +42,10 @@ const (
 	diskByIDDMPath     = diskByIDPath + "dm-uuid-mpath-"
 	diskByIDDMPathNVMe = diskByIDPath + "dm-uuid-mpath-eui."
 	scsiIDPath         = "/lib/udev/scsi_id"
+	maxRetryCount      = 10
+	NVMEMultipathSleepTime = 500
+	NVMESymlinkSleepTime = 200
+
 )
 
 // NewSCSI initializes scsi struct
@@ -363,13 +367,15 @@ func (s *Scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (str
 }
 
 func (s *Scsi) GetNVMEMultipathDMName(device string, pattern string) ([]string, error) {
-
-	var endTime = time.Now().Add(2 * time.Second)
+	
+	var retryCount = 0
 	for {
 		matches, err := s.filePath.Glob(fmt.Sprintf(pattern, device))
-		if len(matches) > 0 || time.Now().After(endTime){
+		if len(matches) > 0  || retryCount == maxRetryCount{
 			return matches, err
 		}
+		time.Sleep(NVMEMultipathSleepTime * time.Millisecond)
+		retryCount = retryCount + 1
 	}
 }
 
@@ -558,12 +564,14 @@ func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 
 func (s *Scsi) GetNVMESymlink(checkPath string) (string, error) {
 
-	var endTime = time.Now().Add(1 * time.Second)
+	var retryCount = 1
 	for {
 		symlink, err := s.filePath.EvalSymlinks(checkPath)
-		if err == nil || time.Now().After(endTime){
+		if err == nil  || retryCount == maxRetryCount{
 			return symlink, err
 		}
+		time.Sleep(NVMESymlinkSleepTime * time.Millisecond)
+		retryCount = retryCount + 1
 	}
 }
 

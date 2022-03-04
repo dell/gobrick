@@ -109,7 +109,7 @@ func (bc *baseConnector) disconnectNVMEDevicesByDeviceName(ctx context.Context, 
 	var err error
 	var wwn string
 	if strings.HasPrefix(name, deviceMapperPrefix) {
-		wwn, err = bc.getDMWWN(ctx, name)
+		wwn, err = bc.getNVMEDMWWN(ctx, name)
 
 	} else {
 		wwn, err = bc.scsi.GetNVMEDeviceWWN(ctx, []string{name})
@@ -192,6 +192,32 @@ func (bc *baseConnector) getDMWWN(ctx context.Context, dm string) (string, error
 	if err == nil {
 		logger.Debug(ctx, "children for DM %s: %s", dm, children)
 		wwn, err := bc.scsi.GetDeviceWWN(ctx, children)
+		if err != nil {
+			logger.Error(ctx, "failed to read WWN for DM %s children: %s", dm, err.Error())
+			return "", err
+		}
+		logger.Debug(ctx, "WWN for DM %s is: %s", dm, wwn)
+		return wwn, nil
+	}
+	logger.Debug(ctx, "failed to get children for DM %s: %s", dm, err.Error())
+	logger.Info(ctx, "can't resolve DM %s WWN from children devices, query multipathd", dm)
+	wwn, err := bc.multipath.GetDMWWID(ctx, dm)
+	if err != nil {
+		msg := fmt.Sprintf("failed to resolve DM %s WWN: %s", dm, err.Error())
+		logger.Error(ctx, msg)
+		return "", errors.New(msg)
+	}
+	logger.Info(ctx, "WWN for DM %s is: %s", dm, wwn)
+	return wwn, nil
+}
+
+func (bc *baseConnector) getNVMEDMWWN(ctx context.Context, dm string) (string, error) {
+	defer tracer.TraceFuncCall(ctx, "baseConnector.getDMWWN")()
+	logger.Info(ctx, "resolve wwn for DM: %s", dm)
+	children, err := bc.scsi.GetDMChildren(ctx, dm)
+	if err == nil {
+		logger.Debug(ctx, "children for DM %s: %s", dm, children)
+		wwn, err := bc.scsi.GetNVMEDeviceWWN(ctx, children)
 		if err != nil {
 			logger.Error(ctx, "failed to read WWN for DM %s children: %s", dm, err.Error())
 			return "", err

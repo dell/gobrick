@@ -211,6 +211,21 @@ func (mr *MockSCSIMockRecorder) GetNVMEMultipathDMName(device, pattern interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNVMEMultipathDMName", reflect.TypeOf((*MockSCSI)(nil).GetNVMEMultipathDMName), device, pattern)
 }
 
+// GetNVMESymlink mocks base method.
+func (m *MockSCSI) GetNVMESymlink(checkPath string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNVMESymlink", checkPath)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNVMESymlink indicates an expected call of GetNVMESymlink.
+func (mr *MockSCSIMockRecorder) GetNVMESymlink(checkPath interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNVMESymlink", reflect.TypeOf((*MockSCSI)(nil).GetNVMESymlink), checkPath)
+}
+
 // IsDeviceExist mocks base method.
 func (m *MockSCSI) IsDeviceExist(ctx context.Context, device string) bool {
 	m.ctrl.T.Helper()

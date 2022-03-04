@@ -27,4 +27,5 @@ type SCSI interface {
 	GetDeviceNameByHCTL(ctx context.Context, h scsi.HCTL) (string, error)
 	WaitUdevSymlink(ctx context.Context, deviceName string, wwn string) error
 	WaitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error
+	GetNVMESymlink(checkPath string) (string, error)
 }

@@ -166,6 +166,21 @@ func (mr *MockSCSIMockRecorder) GetDevicesByWWN(ctx, wwn interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDevicesByWWN", reflect.TypeOf((*MockSCSI)(nil).GetDevicesByWWN), ctx, wwn)
 }
 
+// GetNVMEDMDeviceByChildren mocks base method.
+func (m *MockSCSI) GetNVMEDMDeviceByChildren(ctx context.Context, devices []string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNVMEDMDeviceByChildren", ctx, devices)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNVMEDMDeviceByChildren indicates an expected call of GetNVMEDMDeviceByChildren.
+func (mr *MockSCSIMockRecorder) GetNVMEDMDeviceByChildren(ctx, devices interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNVMEDMDeviceByChildren", reflect.TypeOf((*MockSCSI)(nil).GetNVMEDMDeviceByChildren), ctx, devices)
+}
+
 // GetNVMEDeviceWWN mocks base method.
 func (m *MockSCSI) GetNVMEDeviceWWN(ctx context.Context, devices []string) (string, error) {
 	m.ctrl.T.Helper()
@@ -179,6 +194,21 @@ func (m *MockSCSI) GetNVMEDeviceWWN(ctx context.Context, devices []string) (stri
 func (mr *MockSCSIMockRecorder) GetNVMEDeviceWWN(ctx, devices interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNVMEDeviceWWN", reflect.TypeOf((*MockSCSI)(nil).GetNVMEDeviceWWN), ctx, devices)
+}
+
+// GetNVMEMultipathDMName mocks base method.
+func (m *MockSCSI) GetNVMEMultipathDMName(device, pattern string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNVMEMultipathDMName", device, pattern)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNVMEMultipathDMName indicates an expected call of GetNVMEMultipathDMName.
+func (mr *MockSCSIMockRecorder) GetNVMEMultipathDMName(device, pattern interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNVMEMultipathDMName", reflect.TypeOf((*MockSCSI)(nil).GetNVMEMultipathDMName), device, pattern)
 }
 
 // IsDeviceExist mocks base method.

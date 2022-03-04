@@ -157,6 +157,13 @@ func (s *Scsi) GetDMDeviceByChildren(ctx context.Context, devices []string) (str
 	return s.getDMDeviceByChildren(ctx, devices)
 }
 
+
+// GetNVMEDMDeviceByChildren fetches multipath device name
+func (s *Scsi) GetNVMEDMDeviceByChildren(ctx context.Context, devices []string) (string, error) {
+	defer tracer.TraceFuncCall(ctx, "scsi.GetNVMEDMDeviceByChildren")()
+	return s.getNVMEDMDeviceByChildren(ctx, devices)
+}
+
 // GetDMChildren fetches multipath block devices
 func (s *Scsi) GetDMChildren(ctx context.Context, dm string) ([]string, error) {
 	defer tracer.TraceFuncCall(ctx, "scsi.GetDMChildren")()
@@ -355,6 +362,52 @@ func (s *Scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (str
 	return "", errors.New("dm not found")
 }
 
+func (s *Scsi) GetNVMEMultipathDMName(device string, pattern string) ([]string, error) {
+
+	var endTime = time.Now().Add(2 * time.Second)
+	for {
+		matches, err := s.filePath.Glob(fmt.Sprintf(pattern, device))
+		if len(matches) > 0 || time.Now().After(endTime){
+			return matches, err
+		}
+	}
+}
+
+func (s *Scsi) getNVMEDMDeviceByChildren(ctx context.Context, devices []string) (string, error) {
+	logger.Info(ctx, "multipath - trying to find multipath DM name")
+
+	pattern := "/sys/block/%s/holders/dm-*"
+
+	var match string
+
+	for _, d := range devices {
+		matches, err := s.GetNVMEMultipathDMName(d, pattern)
+		//matches, err := s.filePath.Glob(fmt.Sprintf(pattern, d))
+		if err != nil {
+			return "", err
+		}
+		for _, m := range matches {
+			data, err := s.fileReader.ReadFile(path.Join(m, "dm/uuid"))
+			if err != nil {
+				logger.Error(ctx, "multipath - failed to read dm id file: %s", err.Error())
+				continue
+			}
+			if strings.HasPrefix(string(data), "mpath") {
+				_, dm := path.Split(m)
+				if match == "" {
+					match = dm
+				} else if dm != match {
+					return "", &DevicesHaveDifferentParentsErr{}
+				}
+			}
+		}
+	}
+	if match != "" {
+		return match, nil
+	}
+	return "", errors.New("dm not found")
+}
+
 func (s *Scsi) getDMChildren(ctx context.Context, dm string) ([]string, error) {
 	logger.Info(ctx, "multipath - get block device included in DM")
 	var devices []string
@@ -503,6 +556,17 @@ func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 	return nil
 }
 
+func (s *Scsi) GetNVMESymlink(checkPath string) (string, error) {
+
+	var endTime = time.Now().Add(1 * time.Second)
+	for {
+		symlink, err := s.filePath.EvalSymlinks(checkPath)
+		if err == nil || time.Now().After(endTime){
+			return symlink, err
+		}
+	}
+}
+
 func (s *Scsi) waitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error {
 	var checkPath string
 	if strings.HasPrefix(deviceName, "dm-") {
@@ -510,7 +574,7 @@ func (s *Scsi) waitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn s
 	} else {
 		checkPath = diskByIDSCSIPath + wwn
 	}
-	symlink, err := s.filePath.EvalSymlinks(checkPath)
+	symlink, err := s.GetNVMESymlink(checkPath)
 	if err != nil {
 		msg := fmt.Sprintf("symlink for path %s not found: %s", checkPath, err.Error())
 		logger.Error(ctx, msg)

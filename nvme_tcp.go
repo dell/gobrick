@@ -398,7 +398,7 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 
 		if wwn != "" && mpath == "" {
 			var err error
-			mpath, err = c.scsi.GetDMDeviceByChildren(ctx, devices)
+			mpath, err = c.scsi.GetNVMEDMDeviceByChildren(ctx, devices)
 			if err != nil {
 				logger.Debug(ctx, "failed to get DM by children: %s", err.Error())
 			}

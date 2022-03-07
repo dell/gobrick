@@ -20,9 +20,12 @@ type SCSI interface {
 	GetNVMEDeviceWWN(ctx context.Context, devices []string) (string, error)
 	GetDevicesByWWN(ctx context.Context, wwn string) ([]string, error)
 	GetDMDeviceByChildren(ctx context.Context, devices []string) (string, error)
+	GetNVMEDMDeviceByChildren(ctx context.Context, devices []string) (string, error)
+	GetNVMEMultipathDMName(device string, pattern string) ([]string, error)
 	GetDMChildren(ctx context.Context, dmPath string) ([]string, error)
 	CheckDeviceIsValid(ctx context.Context, device string) bool
 	GetDeviceNameByHCTL(ctx context.Context, h scsi.HCTL) (string, error)
 	WaitUdevSymlink(ctx context.Context, deviceName string, wwn string) error
 	WaitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn string) error
+	GetNVMESymlink(checkPath string) (string, error)
 }

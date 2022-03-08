@@ -474,6 +474,7 @@ func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGrou
 
 		devicePath = DevicePathAndNamespace.DevicePath
 		namespace = DevicePathAndNamespace.Namespace
+		logger.Info(ctx, "!!!!!")
 
 		for _, namespaceID := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
 			nguid, newnamespace, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespaceID)
@@ -485,6 +486,7 @@ func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGrou
 		}
 	}
 	devicePathResult := DevicePathResult{devicePaths: devicePaths, nguid: nguidResult}
+	logger.Info(ctx, "============ %s", devicePathResult)
 
 	result <- devicePathResult
 }

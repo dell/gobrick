@@ -296,9 +296,10 @@ func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeTCP
 	}()
 
 	var devices []string
-	var wwn string
 	var discoveryComplete, lastTry bool
 	var endTime time.Time
+	wwn := info.WWN
+
 	for {
 		// get discovered devices
 		select {
@@ -323,13 +324,14 @@ func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeTCP
 			return Device{}, errors.New(msg)
 		}
 		if wwn == "" && len(devices) != 0 {
-			logger.Info(ctx, "Invalid WWN provided ")
+			msg := "invalid WWN provided"
+			logger.Error(ctx, msg)
+			return Device{}, errors.New(msg)
 		}
 		if wwn != "" && nguid != "" {
 			if len(devices) > 1 {
 				logger.Debug(ctx, "Multiple nvme devices found for the given wwn %s", wwn)
 			}
-			logger.Info(ctx, "------- %s", devices[0])
 			return Device{Name: devices[0], WWN: wwn}, nil
 		}
 		if discoveryComplete && !lastTry {
@@ -369,6 +371,7 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 	wwn := info.WWN
 	var wwnAdded, discoveryComplete, lastTry bool
 	var endTime time.Time
+	nguid := ""
 	for {
 		// get discovered devices
 		select {
@@ -376,7 +379,9 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 			return Device{}, errors.New("connectMultipathDevice canceled")
 		default:
 		}
-		devices, nguid := readNVMeDevicesFromResultCH(devCH, devices)
+		if nguid == "" {
+			devices, nguid = readNVMeDevicesFromResultCH(devCH, devices)
+		}
 
 		// check all discovery gorutines finished
 		if !discoveryComplete {
@@ -474,7 +479,6 @@ func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGrou
 
 		devicePath = DevicePathAndNamespace.DevicePath
 		namespace = DevicePathAndNamespace.Namespace
-		logger.Info(ctx, "!!!!!")
 
 		for _, namespaceID := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
 			nguid, newnamespace, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespaceID)
@@ -486,7 +490,6 @@ func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGrou
 		}
 	}
 	devicePathResult := DevicePathResult{devicePaths: devicePaths, nguid: nguidResult}
-	logger.Info(ctx, "============ %s", devicePathResult)
 
 	result <- devicePathResult
 }

@@ -325,6 +325,7 @@ func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeTCP
 			if len(devices) > 1 {
 				logger.Debug(ctx, "Multiple nvme devices found for the given wwn %s", wwn)
 			}
+			logger.Info("------- %s", devices[0])
 			return Device{Name: devices[0], WWN: wwn}, nil
 		}
 		if discoveryComplete && !lastTry {

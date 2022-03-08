@@ -190,6 +190,10 @@ func (c *NVMeTCPConnector) ConnectVolume(ctx context.Context, info NVMeTCPVolume
 	if multipathIsEnabled {
 		logger.Info(ctx, "start multipath device connection")
 		d, err = c.connectMultipathDevice(ctx, sessions, info)
+		if err != nil {
+			logger.Info(ctx, "start single device connection")
+			d, err = c.connectSingleDevice(ctx, info)
+		}
 	} else {
 		logger.Info(ctx, "start single device connection")
 		d, err = c.connectSingleDevice(ctx, info)
@@ -325,7 +329,7 @@ func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeTCP
 			if len(devices) > 1 {
 				logger.Debug(ctx, "Multiple nvme devices found for the given wwn %s", wwn)
 			}
-			logger.Info("------- %s", devices[0])
+			logger.Info(ctx, "------- %s", devices[0])
 			return Device{Name: devices[0], WWN: wwn}, nil
 		}
 		if discoveryComplete && !lastTry {

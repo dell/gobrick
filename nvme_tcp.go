@@ -190,9 +190,13 @@ func (c *NVMeTCPConnector) ConnectVolume(ctx context.Context, info NVMeTCPVolume
 	if multipathIsEnabled {
 		logger.Info(ctx, "start multipath device connection")
 		d, err = c.connectMultipathDevice(ctx, sessions, info)
+		if err != nil {
+			logger.Info(ctx, "start single device connection")
+			d, err = c.connectSingleDevice(ctx, info)
+		}
 	} else {
 		logger.Info(ctx, "start single device connection")
-		//d, err = c.connectSingleDevice(ctx, info)
+		d, err = c.connectSingleDevice(ctx, info)
 	}
 
 	if err == nil {
@@ -277,11 +281,13 @@ func (c *NVMeTCPConnector) cleanConnection(ctx context.Context, force bool, info
 
 func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeTCPVolumeInfo) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.connectSingleDevice")()
-	devCH := make(chan string, 1)
+	devCH := make(chan DevicePathResult)
 	wg := sync.WaitGroup{}
-	_, cFunc := context.WithTimeout(ctx, c.waitDeviceTimeout)
+	discoveryCtx, cFunc := context.WithTimeout(ctx, c.waitDeviceTimeout)
 	defer cFunc()
 
+	wg.Add(1)
+	go c.discoverDevice(discoveryCtx, &wg, devCH, info)
 	// for non blocking wg wait
 	wgCH := make(chan struct{})
 	go func() {
@@ -290,9 +296,10 @@ func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeTCP
 	}()
 
 	var devices []string
-	var wwn string
 	var discoveryComplete, lastTry bool
 	var endTime time.Time
+	wwn := info.WWN
+
 	for {
 		// get discovered devices
 		select {
@@ -300,7 +307,7 @@ func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeTCP
 			return Device{}, errors.New("connectSingleDevice canceled")
 		default:
 		}
-		devices = readDevicesFromResultCH(devCH, devices)
+		devices, nguid := readNVMeDevicesFromResultCH(devCH, devices)
 		// check all discovery gorutines finished
 		if !discoveryComplete {
 			select {
@@ -317,19 +324,15 @@ func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeTCP
 			return Device{}, errors.New(msg)
 		}
 		if wwn == "" && len(devices) != 0 {
-			var err error
-			wwn, err = c.scsi.GetDeviceWWN(ctx, devices)
-			if err != nil {
-				logger.Debug(ctx, "wwn for devices %s not found", devices)
-			}
+			msg := "invalid WWN provided"
+			logger.Error(ctx, msg)
+			return Device{}, errors.New(msg)
 		}
-		if wwn != "" {
-			for _, d := range devices {
-				if err := c.scsi.WaitUdevSymlinkNVMe(ctx, d, wwn); err == nil {
-					logger.Error(ctx, "registered device found: %s", d)
-					return Device{Name: d, WWN: wwn}, nil
-				}
+		if wwn != "" && nguid != "" {
+			if len(devices) > 1 {
+				logger.Debug(ctx, "Multiple nvme devices found for the given wwn %s", wwn)
 			}
+			return Device{Name: devices[0], WWN: wwn}, nil
 		}
 		if discoveryComplete && !lastTry {
 			logger.Info(ctx, "discovery finished, wait %f seconds for device registration",
@@ -368,6 +371,7 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 	wwn := info.WWN
 	var wwnAdded, discoveryComplete, lastTry bool
 	var endTime time.Time
+	nguid := ""
 	for {
 		// get discovered devices
 		select {
@@ -375,7 +379,9 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 			return Device{}, errors.New("connectMultipathDevice canceled")
 		default:
 		}
-		devices, nguid := readNVMeDevicesFromResultCH(devCH, devices)
+		if nguid == "" {
+			devices, nguid = readNVMeDevicesFromResultCH(devCH, devices)
+		}
 
 		// check all discovery gorutines finished
 		if !discoveryComplete {

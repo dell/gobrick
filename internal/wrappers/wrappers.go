@@ -62,14 +62,16 @@ type ISCSILib interface {
 	CreateOrUpdateNode(target goiscsi.ISCSITarget, options map[string]string) error
 }
 
-// NVMeTCP defines NVMe function spec
-type NVMeTCP interface {
+// NVMe defines NVMe function spec
+type NVMe interface {
 	DiscoverNVMeTCPTargets(address string, login bool) ([]gonvme.NVMeTarget, error)
+	DiscoverNVMeFCTargets(address string, login bool) ([]gonvme.NVMeTarget, error)
 	GetInitiators(filename string) ([]string, error)
-	NVMeConnect(target gonvme.NVMeTarget) error
+	NVMeTCPConnect(target gonvme.NVMeTarget) error
+	NVMeFCConnect(target gonvme.NVMeTarget) error
 	NVMeDisconnect(target gonvme.NVMeTarget) error
 	GetSessions() ([]gonvme.NVMESession, error)
-	ListNamespaceDevices() map[gonvme.DevicePathAndNamespace][]string
+	ListNamespaceDevices() (map[gonvme.DevicePathAndNamespace][]string, error)
 	GetNamespaceData(path string, namespaceID string) (string, string, error)
 }
 

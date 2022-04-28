@@ -35,6 +35,7 @@ import (
 	"github.com/dell/gobrick/pkg/multipath"
 	"github.com/dell/gobrick/pkg/scsi"
 	"github.com/dell/gonvme"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sync/singleflight"
 )
@@ -53,8 +54,8 @@ const (
 	NVMePortDefault = ":4420"
 )
 
-// NVMeTCPConnectorParams - type definition for NVMe TCP connector params
-type NVMeTCPConnectorParams struct {
+// NVMeConnectorParams - type definition for NVMe connector params
+type NVMeConnectorParams struct {
 	// nvmeLib command will run from this chroot
 	Chroot string
 
@@ -76,12 +77,12 @@ type DevicePathResult struct {
 	nguid       string
 }
 
-// NewNVMeTCPConnector - get new NVMeTCPConnector
-func NewNVMeTCPConnector(params NVMeTCPConnectorParams) *NVMeTCPConnector {
+// NewNVMeConnector - get new NVMeConnector
+func NewNVMeConnector(params NVMeConnectorParams) *NVMeConnector {
 	mp := multipath.NewMultipath(params.Chroot)
 	s := scsi.NewSCSI(params.Chroot)
 
-	conn := &NVMeTCPConnector{
+	conn := &NVMeConnector{
 		multipath: mp,
 		scsi:      s,
 		filePath:  &wrp.FilepathWrapper{},
@@ -92,10 +93,10 @@ func NewNVMeTCPConnector(params NVMeTCPConnectorParams) *NVMeTCPConnector {
 				MultipathFlushRetries:      params.MultipathFlushRetries}),
 	}
 
-	nvmeTCPOpts := make(map[string]string)
-	nvmeTCPOpts["chrootDirectory"] = params.Chroot
+	nvmeOpts := make(map[string]string)
+	nvmeOpts["chrootDirectory"] = params.Chroot
 
-	conn.nvmeTCPLib = gonvme.NewNVMeTCP(nvmeTCPOpts)
+	conn.nvmeLib = gonvme.NewNVMe(nvmeOpts)
 
 	// always try to use manual session management first
 	conn.manualSessionManagement = true
@@ -117,12 +118,12 @@ func NewNVMeTCPConnector(params NVMeTCPConnectorParams) *NVMeTCPConnector {
 	return conn
 }
 
-// NVMeTCPConnector - type defenition for NVMe connector
-type NVMeTCPConnector struct {
+// NVMeConnector - type defenition for NVMe connector
+type NVMeConnector struct {
 	baseConnector *baseConnector
 	multipath     intmultipath.Multipath
 	scsi          intscsi.SCSI
-	nvmeTCPLib    wrp.NVMeTCP
+	nvmeLib       wrp.NVMe
 
 	manualSessionManagement bool
 
@@ -138,19 +139,19 @@ type NVMeTCPConnector struct {
 	filePath wrp.LimitedFilepath
 }
 
-// NVMeTCPTargetInfo - Placeholder for NVMe targets
-type NVMeTCPTargetInfo struct {
+// NVMeTargetInfo - Placeholder for NVMe targets
+type NVMeTargetInfo struct {
 	Portal string
 	Target string
 }
 
-// NVMeTCPVolumeInfo - placeholder for NVMe TCP volume
-type NVMeTCPVolumeInfo struct {
-	Targets []NVMeTCPTargetInfo
+// NVMeVolumeInfo - placeholder for NVMe volume
+type NVMeVolumeInfo struct {
+	Targets []NVMeTargetInfo
 	WWN     string
 }
 
-func singleCallKeyForNVMeTCPTargets(info NVMeTCPVolumeInfo) string {
+func singleCallKeyForNVMeTargets(info NVMeVolumeInfo) string {
 	data := make([]string, len(info.Targets))
 	for i, t := range info.Targets {
 		target := strings.Join([]string{t.Portal, t.Target}, ":")
@@ -160,21 +161,21 @@ func singleCallKeyForNVMeTCPTargets(info NVMeTCPVolumeInfo) string {
 }
 
 // ConnectVolume - connect to nvme volume
-func (c *NVMeTCPConnector) ConnectVolume(ctx context.Context, info NVMeTCPVolumeInfo) (Device, error) {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.ConnectVolume")()
+func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo) (Device, error) {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.ConnectVolume")()
 	if err := c.limiter.Acquire(ctx, 1); err != nil {
 		return Device{}, errors.New("too many parallel operations. try later")
 	}
 	defer c.limiter.Release(1)
-	addDefaultNVMeTCPPortToVolumeInfoPortals(&info)
+	addDefaultNVMePortToVolumeInfoPortals(&info)
 
-	if err := c.validateNVMeTCPVolumeInfo(ctx, info); err != nil {
+	if err := c.validateNVMeVolumeInfo(ctx, info); err != nil {
 		return Device{}, err
 	}
 
 	ret, err, _ := c.singleCall.Do(
-		singleCallKeyForNVMeTCPTargets(info),
-		func() (interface{}, error) { return c.checkNVMeTCPSessions(ctx, info) })
+		singleCallKeyForNVMeTargets(info),
+		func() (interface{}, error) { return c.checkNVMeSessions(ctx, info) })
 	if err != nil {
 		return Device{}, err
 	}
@@ -213,19 +214,19 @@ func (c *NVMeTCPConnector) ConnectVolume(ctx context.Context, info NVMeTCPVolume
 }
 
 // DisconnectVolume - disconnect a given nvme volume
-func (c *NVMeTCPConnector) DisconnectVolume(ctx context.Context, info NVMeTCPVolumeInfo) error {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.DisconnectVolume")()
+func (c *NVMeConnector) DisconnectVolume(ctx context.Context, info NVMeVolumeInfo) error {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.DisconnectVolume")()
 	if err := c.limiter.Acquire(ctx, 1); err != nil {
 		return errors.New("too many parallel operations. try later")
 	}
 	defer c.limiter.Release(1)
-	addDefaultNVMeTCPPortToVolumeInfoPortals(&info)
+	addDefaultNVMePortToVolumeInfoPortals(&info)
 	return c.cleanConnection(ctx, false, info)
 }
 
 // DisconnectVolumeByDeviceName - disconnect from a given device
-func (c *NVMeTCPConnector) DisconnectVolumeByDeviceName(ctx context.Context, name string) error {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.DisconnectVolumeByDeviceName")()
+func (c *NVMeConnector) DisconnectVolumeByDeviceName(ctx context.Context, name string) error {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.DisconnectVolumeByDeviceName")()
 	if err := c.limiter.Acquire(ctx, 1); err != nil {
 		return errors.New("too many parallel operations. try later")
 	}
@@ -234,10 +235,10 @@ func (c *NVMeTCPConnector) DisconnectVolumeByDeviceName(ctx context.Context, nam
 }
 
 // GetInitiatorName - returns nqn
-func (c *NVMeTCPConnector) GetInitiatorName(ctx context.Context) ([]string, error) {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.GetInitiatorName")()
+func (c *NVMeConnector) GetInitiatorName(ctx context.Context) ([]string, error) {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.GetInitiatorName")()
 	logger.Info(ctx, "get initiator name")
-	data, err := c.nvmeTCPLib.GetInitiators("")
+	data, err := c.nvmeLib.GetInitiators("")
 	if err != nil {
 		logger.Error(ctx, "failed to read initiator name: %s", err.Error())
 	}
@@ -245,7 +246,7 @@ func (c *NVMeTCPConnector) GetInitiatorName(ctx context.Context) ([]string, erro
 	return data, nil
 }
 
-func addDefaultNVMeTCPPortToVolumeInfoPortals(info *NVMeTCPVolumeInfo) {
+func addDefaultNVMePortToVolumeInfoPortals(info *NVMeVolumeInfo) {
 	for i, t := range info.Targets {
 		if !strings.Contains(t.Portal, ":") {
 			info.Targets[i].Portal += NVMePortDefault
@@ -253,12 +254,15 @@ func addDefaultNVMeTCPPortToVolumeInfoPortals(info *NVMeTCPVolumeInfo) {
 	}
 }
 
-func (c *NVMeTCPConnector) cleanConnection(ctx context.Context, force bool, info NVMeTCPVolumeInfo) error {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.cleanConnection")()
+func (c *NVMeConnector) cleanConnection(ctx context.Context, force bool, info NVMeVolumeInfo) error {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.cleanConnection")()
 	var devices []string
 	wwn := info.WWN
 
-	DevicePathsAndNamespaces := c.nvmeTCPLib.ListNamespaceDevices()
+	DevicePathsAndNamespaces, err := c.nvmeLib.ListNamespaceDevices()
+	if err != nil {
+		log.Errorf("Couldn't find the nvme namespaces %s", err.Error())
+	}
 	var devicePath string
 	var namespace string
 
@@ -266,7 +270,7 @@ func (c *NVMeTCPConnector) cleanConnection(ctx context.Context, force bool, info
 		devicePath = DevicePathAndNamespace.DevicePath
 		namespace = DevicePathAndNamespace.Namespace
 		for _, namespaceID := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
-			nguid, newnamespace, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespaceID)
+			nguid, newnamespace, _ := c.nvmeLib.GetNamespaceData(devicePath, namespaceID)
 
 			if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
 				devices = append(devices, devicePath)
@@ -279,8 +283,8 @@ func (c *NVMeTCPConnector) cleanConnection(ctx context.Context, force bool, info
 	return c.baseConnector.cleanDevices(ctx, force, devices)
 }
 
-func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeTCPVolumeInfo) (Device, error) {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.connectSingleDevice")()
+func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolumeInfo) (Device, error) {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.connectSingleDevice")()
 	devCH := make(chan DevicePathResult)
 	wg := sync.WaitGroup{}
 	discoveryCtx, cFunc := context.WithTimeout(ctx, c.waitDeviceTimeout)
@@ -349,9 +353,9 @@ func (c *NVMeTCPConnector) connectSingleDevice(ctx context.Context, info NVMeTCP
 	}
 }
 
-func (c *NVMeTCPConnector) connectMultipathDevice(
-	ctx context.Context, sessions []gonvme.NVMESession, info NVMeTCPVolumeInfo) (Device, error) {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.connectMultipathDevice")()
+func (c *NVMeConnector) connectMultipathDevice(
+	ctx context.Context, sessions []gonvme.NVMESession, info NVMeVolumeInfo) (Device, error) {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.connectMultipathDevice")()
 	devCH := make(chan DevicePathResult)
 	wg := sync.WaitGroup{}
 	discoveryCtx, cFunc := context.WithTimeout(ctx, c.waitDeviceTimeout)
@@ -444,8 +448,8 @@ func (c *NVMeTCPConnector) connectMultipathDevice(
 	}
 }
 
-func (c *NVMeTCPConnector) validateNVMeTCPVolumeInfo(ctx context.Context, info NVMeTCPVolumeInfo) error {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.validateNVMeTCPVolumeInfo")()
+func (c *NVMeConnector) validateNVMeVolumeInfo(ctx context.Context, info NVMeVolumeInfo) error {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.validateNVMeVolumeInfo")()
 	if len(info.Targets) == 0 {
 		return errors.New("at least one NVMe target required")
 	}
@@ -462,12 +466,15 @@ func (c *NVMeTCPConnector) validateNVMeTCPVolumeInfo(ctx context.Context, info N
 	return nil
 }
 
-func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, result chan DevicePathResult, info NVMeTCPVolumeInfo) {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.findDevice")()
+func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, result chan DevicePathResult, info NVMeVolumeInfo) {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.findDevice")()
 	defer wg.Done()
 	wwn := info.WWN
 
-	DevicePathsAndNamespaces := c.nvmeTCPLib.ListNamespaceDevices()
+	DevicePathsAndNamespaces, err := c.nvmeLib.ListNamespaceDevices()
+	if err != nil {
+		log.Errorf("Couldn't find the nvme namespaces %s", err.Error())
+	}
 
 	var devicePaths []string
 	var devicePath string
@@ -481,7 +488,7 @@ func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGrou
 		namespace = DevicePathAndNamespace.Namespace
 
 		for _, namespaceID := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
-			nguid, newnamespace, _ := c.nvmeTCPLib.GetNamespaceData(devicePath, namespaceID)
+			nguid, newnamespace, _ := c.nvmeLib.GetNamespaceData(devicePath, namespaceID)
 
 			if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
 				devicePaths = append(devicePaths, devicePath)
@@ -494,7 +501,7 @@ func (c *NVMeTCPConnector) discoverDevice(ctx context.Context, wg *sync.WaitGrou
 	result <- devicePathResult
 }
 
-func (c *NVMeTCPConnector) wwnMatches(nguid, wwn string) bool {
+func (c *NVMeConnector) wwnMatches(nguid, wwn string) bool {
 
 	/*
 		Sample wwn : naa.68ccf098001111a2222b3d4444a1b23c
@@ -527,11 +534,11 @@ func readNVMeDevicesFromResultCH(ch chan DevicePathResult, result []string) ([]s
 	return devicePaths, devicePathResult.nguid
 }
 
-func (c *NVMeTCPConnector) checkNVMeTCPSessions(
-	ctx context.Context, info NVMeTCPVolumeInfo) ([]gonvme.NVMESession, error) {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.checkNVMeTCPSessions")()
+func (c *NVMeConnector) checkNVMeSessions(
+	ctx context.Context, info NVMeVolumeInfo) ([]gonvme.NVMESession, error) {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.checkNVMeSessions")()
 	var activeSessions []gonvme.NVMESession
-	//var targetsToLogin []NVMeTCPTargetInfo
+	//var targetsToLogin []NVMeTargetInfo
 	for _, t := range info.Targets {
 		logger.Info(ctx,
 			"check NVMe session for %s %s", t.Portal, t.Target)
@@ -556,12 +563,12 @@ func (c *NVMeTCPConnector) checkNVMeTCPSessions(
 	return activeSessions, nil
 }
 
-func (c *NVMeTCPConnector) getSessionByTargetInfo(ctx context.Context,
-	target NVMeTCPTargetInfo) (gonvme.NVMESession, bool, error) {
-	defer tracer.TraceFuncCall(ctx, "NVMeTCPConnector.getSessionByTargetInfo")()
+func (c *NVMeConnector) getSessionByTargetInfo(ctx context.Context,
+	target NVMeTargetInfo) (gonvme.NVMESession, bool, error) {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.getSessionByTargetInfo")()
 	r := gonvme.NVMESession{}
 	logPrefix := fmt.Sprintf("Portal: %s, Target: %s :", target.Portal, target.Target)
-	sessions, err := c.nvmeTCPLib.GetSessions()
+	sessions, err := c.nvmeLib.GetSessions()
 	if err != nil {
 		logger.Error(ctx, logPrefix+"unable to get nvme sessions: %s", err.Error())
 		return r, false, err

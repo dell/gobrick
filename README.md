@@ -1,5 +1,5 @@
 # GOBRICK
-**Library for iSCSI/FC/NVMeTCP volume connection**
+**Library for iSCSI/FC/NVMe volume connection**
 
 
 ### Example

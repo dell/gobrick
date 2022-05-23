@@ -67,8 +67,8 @@ type NVMe interface {
 	DiscoverNVMeTCPTargets(address string, login bool) ([]gonvme.NVMeTarget, error)
 	DiscoverNVMeFCTargets(address string, login bool) ([]gonvme.NVMeTarget, error)
 	GetInitiators(filename string) ([]string, error)
-	NVMeTCPConnect(target gonvme.NVMeTarget) error
-	NVMeFCConnect(target gonvme.NVMeTarget) error
+	NVMeTCPConnect(target gonvme.NVMeTarget, duplicateConnect bool) error
+	NVMeFCConnect(target gonvme.NVMeTarget, duplicateConnect bool) error
 	NVMeDisconnect(target gonvme.NVMeTarget) error
 	GetSessions() ([]gonvme.NVMESession, error)
 	ListNamespaceDevices() (map[gonvme.DevicePathAndNamespace][]string, error)

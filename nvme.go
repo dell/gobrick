@@ -77,6 +77,12 @@ type DevicePathResult struct {
 	nguid       string
 }
 
+// FCHBAInfo holds information about host NVMe/FC ports
+type FCHBAInfo struct {
+	PortName string
+	NodeName string
+}
+
 // NewNVMeConnector - get new NVMeConnector
 func NewNVMeConnector(params NVMeConnectorParams) *NVMeConnector {
 	mp := multipath.NewMultipath(params.Chroot)
@@ -86,6 +92,7 @@ func NewNVMeConnector(params NVMeConnectorParams) *NVMeConnector {
 		multipath: mp,
 		scsi:      s,
 		filePath:  &wrp.FilepathWrapper{},
+		ioutil:    &wrp.IOUTILWrapper{},
 		baseConnector: newBaseConnector(mp, s,
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
@@ -137,6 +144,7 @@ type NVMeConnector struct {
 
 	// wrappers
 	filePath wrp.LimitedFilepath
+	ioutil   wrp.LimitedIOUtil
 }
 
 // NVMeTargetInfo - Placeholder for NVMe targets
@@ -161,7 +169,7 @@ func singleCallKeyForNVMeTargets(info NVMeVolumeInfo) string {
 }
 
 // ConnectVolume - connect to nvme volume
-func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo) (Device, error) {
+func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo, useFC bool) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.ConnectVolume")()
 	if err := c.limiter.Acquire(ctx, 1); err != nil {
 		return Device{}, errors.New("too many parallel operations. try later")
@@ -190,14 +198,14 @@ func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo) 
 
 	if multipathIsEnabled {
 		logger.Info(ctx, "start multipath device connection")
-		d, err = c.connectMultipathDevice(ctx, sessions, info)
+		d, err = c.connectMultipathDevice(ctx, sessions, info, useFC)
 		if err != nil {
 			logger.Info(ctx, "start single device connection")
-			d, err = c.connectSingleDevice(ctx, info)
+			d, err = c.connectSingleDevice(ctx, info, useFC)
 		}
 	} else {
 		logger.Info(ctx, "start single device connection")
-		d, err = c.connectSingleDevice(ctx, info)
+		d, err = c.connectSingleDevice(ctx, info, useFC)
 	}
 
 	if err == nil {
@@ -283,7 +291,7 @@ func (c *NVMeConnector) cleanConnection(ctx context.Context, force bool, info NV
 	return c.baseConnector.cleanDevices(ctx, force, devices)
 }
 
-func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolumeInfo) (Device, error) {
+func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolumeInfo, useFC bool) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.connectSingleDevice")()
 	devCH := make(chan DevicePathResult)
 	wg := sync.WaitGroup{}
@@ -291,7 +299,7 @@ func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolume
 	defer cFunc()
 
 	wg.Add(1)
-	go c.discoverDevice(discoveryCtx, &wg, devCH, info)
+	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC)
 	// for non blocking wg wait
 	wgCH := make(chan struct{})
 	go func() {
@@ -354,7 +362,7 @@ func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolume
 }
 
 func (c *NVMeConnector) connectMultipathDevice(
-	ctx context.Context, sessions []gonvme.NVMESession, info NVMeVolumeInfo) (Device, error) {
+	ctx context.Context, sessions []gonvme.NVMESession, info NVMeVolumeInfo, useFC bool) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.connectMultipathDevice")()
 	devCH := make(chan DevicePathResult)
 	wg := sync.WaitGroup{}
@@ -362,7 +370,7 @@ func (c *NVMeConnector) connectMultipathDevice(
 	defer cFunc()
 
 	wg.Add(1)
-	go c.discoverDevice(discoveryCtx, &wg, devCH, info)
+	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC)
 	// for non blocking wg wait
 	wgCH := make(chan struct{})
 	go func() {
@@ -466,37 +474,50 @@ func (c *NVMeConnector) validateNVMeVolumeInfo(ctx context.Context, info NVMeVol
 	return nil
 }
 
-func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, result chan DevicePathResult, info NVMeVolumeInfo) {
+func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, result chan DevicePathResult, info NVMeVolumeInfo, useFC bool) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.findDevice")()
 	defer wg.Done()
 	wwn := info.WWN
 
-	DevicePathsAndNamespaces, err := c.nvmeLib.ListNamespaceDevices()
-	if err != nil {
-		log.Errorf("Couldn't find the nvme namespaces %s", err.Error())
-	}
+	var devicePathResult DevicePathResult
+	retryCount := 0
+	for {
+		nguidResult := ""
 
-	var devicePaths []string
-	var devicePath string
-	var namespace string
+		DevicePathsAndNamespaces, err := c.nvmeLib.ListNamespaceDevices()
+		if err != nil {
+			log.Errorf("Couldn't find the nvme namespaces %s", err.Error())
+		}
 
-	nguidResult := ""
+		var devicePaths []string
+		var devicePath string
+		var namespace string
 
-	for DevicePathAndNamespace := range DevicePathsAndNamespaces {
+		for DevicePathAndNamespace := range DevicePathsAndNamespaces {
 
-		devicePath = DevicePathAndNamespace.DevicePath
-		namespace = DevicePathAndNamespace.Namespace
+			devicePath = DevicePathAndNamespace.DevicePath
+			namespace = DevicePathAndNamespace.Namespace
 
-		for _, namespaceID := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
-			nguid, newnamespace, _ := c.nvmeLib.GetNamespaceData(devicePath, namespaceID)
+			for _, namespaceID := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
+				nguid, newnamespace, _ := c.nvmeLib.GetNamespaceData(devicePath, namespaceID)
 
-			if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
-				devicePaths = append(devicePaths, devicePath)
-				nguidResult = nguid
+				if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
+					devicePaths = append(devicePaths, devicePath)
+					nguidResult = nguid
+				}
 			}
 		}
+		devicePathResult = DevicePathResult{devicePaths: devicePaths, nguid: nguidResult}
+
+		if nguidResult != "" || retryCount == 1 {
+			break
+		}
+		err = c.tryNVMeConnect(ctx, info, useFC)
+		if err != nil {
+			log.Errorf("Couldn't perform duplicate NVMe connect")
+		}
+		retryCount = retryCount + 1
 	}
-	devicePathResult := DevicePathResult{devicePaths: devicePaths, nguid: nguidResult}
 
 	result <- devicePathResult
 }
@@ -520,6 +541,34 @@ func (c *NVMeConnector) wwnMatches(nguid, wwn string) bool {
 		return true
 	}
 	return false
+}
+
+func (c *NVMeConnector) tryNVMeConnect(ctx context.Context, info NVMeVolumeInfo, useFC bool) error {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.tryNVMeConnect")()
+	targets := info.Targets
+
+	if useFC {
+		FCHostsInfo, err := c.getFCHostInfo(ctx)
+		if err != nil {
+			log.Errorf("Error gathering NVMe/FC Hosts on the host side: %v", err)
+			return err
+		}
+
+		for _, t := range targets {
+			for _, FCHostInfo := range FCHostsInfo {
+				hostAddress := strings.Replace(fmt.Sprintf("nn-%s:pn-%s", FCHostInfo.NodeName, FCHostInfo.PortName), "\n", "", -1)
+				tgt := gonvme.NVMeTarget{Portal: t.Portal, TargetNqn: t.Target, HostAdr: hostAddress}
+				err = c.nvmeLib.NVMeFCConnect(tgt, true)
+				if err != nil {
+					log.Errorf("Couldn't connect to NVMeFC target")
+					continue
+				} else {
+					return nil
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func readNVMeDevicesFromResultCH(ch chan DevicePathResult, result []string) ([]string, string) {
@@ -588,4 +637,35 @@ func (c *NVMeConnector) getSessionByTargetInfo(ctx context.Context,
 		logger.Info(ctx, logPrefix+"nvme session not found")
 	}
 	return r, found, nil
+}
+
+func (c *NVMeConnector) getFCHostInfo(ctx context.Context) ([]FCHBAInfo, error) {
+	defer tracer.TraceFuncCall(ctx, "NVMeConnector.getFCHostInfo")()
+	logger.Info(ctx, "get FC hbas info")
+	match, err := c.filePath.Glob("/sys/class/fc_host/host*")
+	if err != nil {
+		logger.Error(ctx, err.Error())
+		return nil, err
+	}
+
+	var FCHostsInfo []FCHBAInfo
+	for _, m := range match {
+		var FCHostInfo FCHBAInfo
+		data, err := c.ioutil.ReadFile(path.Join(m, "port_name"))
+		if err != nil {
+			log.Errorf("match: %s failed to read port_name file: %s", match, err.Error())
+			continue
+		}
+		FCHostInfo.PortName = strings.TrimSpace(string(data))
+
+		data, err = c.ioutil.ReadFile(path.Join(m, "node_name"))
+		if err != nil {
+			log.Errorf("match: %s failed to read node_name file: %s", match, err.Error())
+			continue
+		}
+		FCHostInfo.NodeName = strings.TrimSpace(string(data))
+		FCHostsInfo = append(FCHostsInfo, FCHostInfo)
+	}
+	logger.Info(ctx, "FC hbas found: %s", FCHostsInfo)
+	return FCHostsInfo, nil
 }

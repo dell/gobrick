@@ -266,7 +266,7 @@ func (s *Scsi) getDeviceWWNWithSCSIID(ctx context.Context, device string) (strin
 
 	err := utils.ValidateDeviceName(device)
 	if err != nil {
-		return err
+		return "", err
 	}
 	command := scsiIDPath
 	args := []string{"-g", "-p", "0x83", "/dev/" + device}

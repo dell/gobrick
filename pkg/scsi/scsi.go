@@ -32,6 +32,7 @@ import (
 
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
+	"github.com/dell/gobrick/internal/utils"
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"golang.org/x/sync/singleflight"
 )
@@ -262,6 +263,11 @@ func (s *Scsi) getNVMEDeviceWWN(ctx context.Context, devices []string) (string, 
 
 func (s *Scsi) getDeviceWWNWithSCSIID(ctx context.Context, device string) (string, error) {
 	logger.Debug(ctx, "get wwn with scsi_id for device: %s", device)
+
+	err := utils.ValidateDeviceName(device)
+	if err != nil {
+		return err
+	}
 	command := scsiIDPath
 	args := []string{"-g", "-p", "0x83", "/dev/" + device}
 	if s.chroot != "" {

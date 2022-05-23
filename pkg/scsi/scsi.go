@@ -32,8 +32,8 @@ import (
 
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
-	"github.com/dell/gobrick/internal/utils"
-	wrp "github.com/dell/gobrick/pkg/wrappers"
+	wrp "github.com/dell/gobrick/internal/wrappers"
+	"github.com/dell/gobrick/pkg/utils"
 	"golang.org/x/sync/singleflight"
 )
 

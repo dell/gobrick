@@ -29,6 +29,7 @@ import (
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
+	"github.com/dell/gobrick/pkg/utils"
 )
 
 const (
@@ -179,6 +180,11 @@ func (mp *Multipath) getDMWWID(ctx context.Context, deviceMapName string) (strin
 }
 
 func (mp *Multipath) runCommand(ctx context.Context, command string, args []string) ([]byte, error) {
+	err := utils.ValidateCommandInput(command)
+	if err != nil {
+		return nil, err
+	}
+
 	if mp.chroot != "" {
 		args = append([]string{mp.chroot, command}, args...)
 		command = "chroot"

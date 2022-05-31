@@ -504,6 +504,9 @@ func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, 
 				if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
 					devicePaths = append(devicePaths, devicePath)
 					nguidResult = nguid
+					if len(devicePaths) >= 2 {
+						break
+					}
 				}
 			}
 		}

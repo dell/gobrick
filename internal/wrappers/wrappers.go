@@ -90,7 +90,7 @@ type IOUTILWrapper struct{}
 
 // ReadFile is a wrapper of ioutil.ReadFile
 func (io *IOUTILWrapper) ReadFile(filename string) ([]byte, error) {
-	return ioutil.ReadFile(filename) // #nosec G304
+	return ioutil.ReadFile(filepath.Clean(filename))
 }
 
 // FilepathWrapper contains implementation of LimitedFilePath interface

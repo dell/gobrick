@@ -124,7 +124,43 @@ func (bc *baseConnector) disconnectNVMEDevicesByDeviceName(ctx context.Context, 
 		logger.Error(ctx, "failed to find devices by wwn: %s", err.Error())
 		return err
 	}
-	return bc.cleanDevices(ctx, false, devices)
+	return bc.cleanNVMeDevices(ctx, false, devices)
+}
+
+func (bc *baseConnector) cleanNVMeDevices(ctx context.Context,
+	force bool, devices []string) error {
+	defer tracer.TraceFuncCall(ctx, "baseConnector.cleanNVMeDevices")()
+	var newDevices []string
+	for _, device := range devices {
+		newDevice := strings.ReplaceAll(device, "/dev/", "")
+		newDevices = append(newDevices, newDevice)
+	}
+	dm, err := bc.scsi.GetDMDeviceByChildren(ctx, newDevices)
+	if err != nil {
+		logger.Info(ctx, "multipath device not found: %s", err.Error())
+	} else {
+		err := bc.cleanMultipathDevice(ctx, dm)
+		if err != nil {
+			msg := fmt.Sprintf("failed to flush multipath device: %s", err.Error())
+			logger.Error(ctx, msg)
+			if !force {
+				return err
+			}
+		}
+	}
+	for _, d := range newDevices {
+		err := bc.scsi.DeleteSCSIDeviceByName(ctx, d)
+		if err != nil {
+			logger.Error(ctx, "can't delete block device: %s", err.Error())
+			if !force {
+				return err
+			}
+		}
+		if dm != "" {
+			_ = bc.multipath.DelPath(ctx, path.Join("/dev", d))
+		}
+	}
+	return nil
 }
 
 func (bc *baseConnector) cleanDevices(ctx context.Context,

@@ -71,8 +71,8 @@ type NVMe interface {
 	NVMeFCConnect(target gonvme.NVMeTarget, duplicateConnect bool) error
 	NVMeDisconnect(target gonvme.NVMeTarget) error
 	GetSessions() ([]gonvme.NVMESession, error)
-	ListNamespaceDevices() (map[gonvme.DevicePathAndNamespace][]string, error)
-	GetNamespaceData(path string, namespaceID string) (string, string, error)
+	ListNVMeDeviceAndNamespace() ([]gonvme.DevicePathAndNamespace, error)
+	GetNVMeDeviceData(path string) (string, string, error)
 }
 
 // wrappers

@@ -267,28 +267,27 @@ func (c *NVMeConnector) cleanConnection(ctx context.Context, force bool, info NV
 	var devices []string
 	wwn := info.WWN
 
-	DevicePathsAndNamespaces, err := c.nvmeLib.ListNamespaceDevices()
+	DevicePathsAndNamespaces, err := c.nvmeLib.ListNVMeDeviceAndNamespace()
 	if err != nil {
 		log.Errorf("Couldn't find the nvme namespaces %s", err.Error())
 	}
 	var devicePath string
 	var namespace string
 
-	for DevicePathAndNamespace := range DevicePathsAndNamespaces {
+	for _, DevicePathAndNamespace := range DevicePathsAndNamespaces {
 		devicePath = DevicePathAndNamespace.DevicePath
 		namespace = DevicePathAndNamespace.Namespace
-		for _, namespaceID := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
-			nguid, newnamespace, _ := c.nvmeLib.GetNamespaceData(devicePath, namespaceID)
 
-			if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
-				devices = append(devices, devicePath)
-			}
+		nguid, newnamespace, _ := c.nvmeLib.GetNVMeDeviceData(devicePath)
+
+		if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
+			devices = append(devices, devicePath)
 		}
 	}
 	if len(devices) == 0 {
 		return nil
 	}
-	return c.baseConnector.cleanDevices(ctx, force, devices)
+	return c.baseConnector.cleanNVMeDevices(ctx, force, devices)
 }
 
 func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolumeInfo, useFC bool) (Device, error) {
@@ -484,7 +483,7 @@ func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, 
 	for {
 		nguidResult := ""
 
-		DevicePathsAndNamespaces, err := c.nvmeLib.ListNamespaceDevices()
+		DevicePathsAndNamespaces, err := c.nvmeLib.ListNVMeDeviceAndNamespace()
 		if err != nil {
 			log.Errorf("Couldn't find the nvme namespaces %s", err.Error())
 		}
@@ -493,21 +492,19 @@ func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, 
 		var devicePath string
 		var namespace string
 
-		for DevicePathAndNamespace := range DevicePathsAndNamespaces {
+		for _, DevicePathAndNamespace := range DevicePathsAndNamespaces {
 
 			devicePath = DevicePathAndNamespace.DevicePath
 			namespace = DevicePathAndNamespace.Namespace
 
-			for _, namespaceID := range DevicePathsAndNamespaces[DevicePathAndNamespace] {
-				nguid, newnamespace, _ := c.nvmeLib.GetNamespaceData(devicePath, namespaceID)
+			nguid, newnamespace, _ := c.nvmeLib.GetNVMeDeviceData(devicePath)
 
-				if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
-					devicePaths = append(devicePaths, devicePath)
-					nguidResult = nguid
-					// using two nvme devices for each volume for the multipath discovery
-					if len(devicePaths) >= 2 {
-						break
-					}
+			if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
+				devicePaths = append(devicePaths, devicePath)
+				nguidResult = nguid
+				// using two nvme devices for each volume for the multipath discovery
+				if len(devicePaths) >= 2 {
+					break
 				}
 			}
 		}

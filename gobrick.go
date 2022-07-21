@@ -30,6 +30,7 @@ type Device struct {
 	WWN         string
 	Name        string
 	MultipathID string
+	PowerpathID string
 }
 
 // Logger defines logger interface used

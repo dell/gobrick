@@ -59,13 +59,6 @@ type FCConnectorParams struct {
 	// how many retries for multipath flush
 	MultipathFlushRetries int
 
-	// timeout for powerpath flush command
-	PowerpathFlushTimeout time.Duration
-	// timeout for each powerpath flush retry
-	PowerpathFlushRetryTimeout time.Duration
-	// how many retries for powerpath flush
-	PowerpathFlushRetries int
-
 	// how many parallel operations allowed
 	MaxParallelOperations int
 }
@@ -87,10 +80,7 @@ func NewFCConnector(params FCConnectorParams) *FCConnector {
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
 				MultipathFlushRetryTimeout: params.MultipathFlushRetryTimeout,
-				MultipathFlushRetries:      params.MultipathFlushRetries,
-				PowerpathFlushTimeout:      params.PowerpathFlushTimeout,
-				PowerpathFlushRetryTimeout: params.PowerpathFlushRetryTimeout,
-				PowerpathFlushRetries:      params.PowerpathFlushRetries}),
+				MultipathFlushRetries:      params.MultipathFlushRetries}),
 	}
 
 	setTimeouts(&conn.waitDeviceRegisterTimeout, params.WaitDeviceRegisterTimeout,

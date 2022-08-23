@@ -44,9 +44,6 @@ type baseConnectorParams struct {
 	MultipathFlushRetries      int
 	MultipathFlushTimeout      time.Duration
 	MultipathFlushRetryTimeout time.Duration
-	PowerpathFlushRetries      int
-	PowerpathFlushTimeout      time.Duration
-	PowerpathFlushRetryTimeout time.Duration
 }
 
 func newBaseConnector(mp intmultipath.Multipath, pp intpowerpath.Powerpath, s intscsi.SCSI, params baseConnectorParams) *baseConnector {

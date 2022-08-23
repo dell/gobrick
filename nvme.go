@@ -68,11 +68,8 @@ type NVMeConnectorParams struct {
 	FailedSessionMinimumLoginRetryInterval time.Duration
 	MultipathFlushTimeout                  time.Duration
 	MultipathFlushRetryTimeout             time.Duration
-	PowerpathFlushTimeout                  time.Duration
-	PowerpathFlushRetryTimeout             time.Duration
 
 	MultipathFlushRetries int
-	PowerpathFlushRetries int
 	MaxParallelOperations int
 }
 
@@ -104,10 +101,7 @@ func NewNVMeConnector(params NVMeConnectorParams) *NVMeConnector {
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
 				MultipathFlushRetryTimeout: params.MultipathFlushRetryTimeout,
-				MultipathFlushRetries:      params.MultipathFlushRetries,
-				PowerpathFlushTimeout:      params.PowerpathFlushTimeout,
-				PowerpathFlushRetryTimeout: params.PowerpathFlushRetryTimeout,
-				PowerpathFlushRetries:      params.PowerpathFlushRetries}),
+				MultipathFlushRetries:      params.MultipathFlushRetries}),
 	}
 
 	nvmeOpts := make(map[string]string)

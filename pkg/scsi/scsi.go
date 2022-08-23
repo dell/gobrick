@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"path"
 	"sort"
@@ -558,6 +559,7 @@ func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 		logger.Info(ctx, msg)
 		return errors.New(msg)
 	}
+	log.Debugf("check path: %s, symlink: %s for wwn: %s", checkPath, symlink, wwn)
 	if d := strings.Replace(symlink, "/dev/", "", 1); d != deviceName {
 		msg := fmt.Sprintf("udev symlink point to unexpected device: %s", d)
 		logger.Info(ctx, msg)

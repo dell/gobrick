@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"math"
 	"os/exec"
 	"path"
@@ -32,10 +33,12 @@ import (
 
 	"github.com/dell/gobrick/internal/logger"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
+	intpowerpath "github.com/dell/gobrick/internal/powerpath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/dell/gobrick/pkg/multipath"
+	"github.com/dell/gobrick/pkg/powerpath"
 	"github.com/dell/gobrick/pkg/scsi"
 	"github.com/dell/goiscsi"
 	"golang.org/x/sync/semaphore"
@@ -74,13 +77,15 @@ type ISCSIConnectorParams struct {
 // NewISCSIConnector creates an ISCSI client and returns it
 func NewISCSIConnector(params ISCSIConnectorParams) *ISCSIConnector {
 	mp := multipath.NewMultipath(params.Chroot)
+	pp := powerpath.NewPowerpath(params.Chroot)
 	s := scsi.NewSCSI(params.Chroot)
 
 	conn := &ISCSIConnector{
 		multipath: mp,
+		powerpath: pp,
 		scsi:      s,
 		filePath:  &wrp.FilepathWrapper{},
-		baseConnector: newBaseConnector(mp, s,
+		baseConnector: newBaseConnector(mp, pp, s,
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
 				MultipathFlushRetryTimeout: params.MultipathFlushRetryTimeout,
@@ -121,6 +126,7 @@ func NewISCSIConnector(params ISCSIConnectorParams) *ISCSIConnector {
 type ISCSIConnector struct {
 	baseConnector *baseConnector
 	multipath     intmultipath.Multipath
+	powerpath     intpowerpath.Powerpath
 	scsi          intscsi.SCSI
 	iscsiLib      wrp.ISCSILib
 
@@ -177,22 +183,33 @@ func (c *ISCSIConnector) ConnectVolume(ctx context.Context, info ISCSIVolumeInfo
 	if err := c.validateISCSIVolumeInfo(ctx, info); err != nil {
 		return Device{}, err
 	}
+	logger.Info(ctx, "validating sessions completed")
 	ret, err, _ := c.singleCall.Do(
 		singleCallKeyForISCSITargets(info),
 		func() (interface{}, error) { return c.checkISCSISessions(ctx, info) })
 	if err != nil {
 		return Device{}, err
 	}
+	logger.Info(ctx, "getting sessions")
 	sessions := ret.([]goiscsi.ISCSISession)
+	logger.Info(ctx, "checking the daemon")
+	ret, _, _ = c.singleCall.Do(
+		"IsPowerPathDaemonRunning",
+		func() (interface{}, error) { return c.powerpath.IsDaemonRunning(ctx), nil })
+	powerpathIsEnabled := ret.(bool)
 
 	ret, _, _ = c.singleCall.Do(
-		"IsDaemonRunning",
+		"IsMultiPathDaemonRunning",
 		func() (interface{}, error) { return c.multipath.IsDaemonRunning(ctx), nil })
 	multipathIsEnabled := ret.(bool)
+	logger.Info(ctx, "checked the daemon status")
 
 	var d Device
 
-	if multipathIsEnabled {
+	if powerpathIsEnabled {
+		logger.Info(ctx, "start powerpath device connection")
+		d, err = c.connectPowerpathDevice(ctx, sessions, info)
+	} else if multipathIsEnabled {
 		logger.Info(ctx, "start multipath device connection")
 		d, err = c.connectMultipathDevice(ctx, sessions, info)
 	} else {
@@ -375,6 +392,88 @@ func readDevicesFromResultCH(ch chan string, result []string) []string {
 	}
 }
 
+func (c *ISCSIConnector) connectPowerpathDevice(
+	ctx context.Context, sessions []goiscsi.ISCSISession, info ISCSIVolumeInfo) (Device, error) {
+	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.connectPowerpathDevice")()
+	devCH := make(chan string, len(sessions))
+	wg := sync.WaitGroup{}
+	discoveryCtx, cFunc := context.WithTimeout(ctx, c.waitDeviceTimeout)
+	defer cFunc()
+
+	for _, s := range sessions {
+		wg.Add(1)
+		go c.discoverDevice(discoveryCtx, 4, &wg, devCH, s, info)
+	}
+	// for non blocking wg wait
+	wgCH := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(wgCH)
+	}()
+
+	var devices []string
+	var wwn, ppath string
+	var discoveryComplete, lastTry bool
+	var endTime time.Time
+	for {
+		// get discovered devices
+		select {
+		case <-ctx.Done():
+			return Device{}, errors.New("connectPowerpathDevice canceled")
+		default:
+		}
+		devices = readDevicesFromResultCH(devCH, devices)
+		// check all discovery gorutines finished
+		if !discoveryComplete {
+			select {
+			case <-wgCH:
+				discoveryComplete = true
+				logger.Info(ctx, "all discovery goroutines complete")
+			default:
+				logger.Info(ctx, "discovery goroutines are still running")
+			}
+		}
+		if discoveryComplete && len(devices) == 0 {
+			msg := "discovery complete but devices not found"
+			logger.Error(ctx, msg)
+			return Device{}, errors.New(msg)
+		}
+		if wwn == "" && len(devices) != 0 {
+			var err error
+			wwn, err = c.scsi.GetDeviceWWN(ctx, devices)
+			if err != nil {
+				logger.Info(ctx, "wwn for devices %s not found", devices)
+			}
+		}
+		if wwn != "" && ppath == "" {
+			var err error
+			ppath, err = c.powerpath.GetPowerPathDevices(ctx, devices)
+			if err != nil {
+				logger.Debug(ctx, "failed to get powerpath device: %s", err.Error())
+			}
+			log.Debugf("pp device: %s devices: %+v", ppath, devices)
+		}
+		if ppath != "" {
+			if err := c.scsi.WaitUdevSymlink(ctx, ppath, wwn); err == nil {
+				logger.Info(ctx, "powerpath device found: %s", ppath)
+				return Device{WWN: wwn, Name: ppath, PowerpathID: wwn}, nil
+			}
+		}
+		if discoveryComplete && !lastTry {
+			logger.Info(ctx, "discovery finished, wait %f seconds for device registration",
+				c.waitDeviceRegisterTimeout.Seconds())
+			lastTry = true
+			endTime = time.Now().Add(c.waitDeviceRegisterTimeout)
+		}
+		if lastTry && time.Now().After(endTime) {
+			msg := "registered device not found"
+			logger.Error(ctx, msg)
+			return Device{}, errors.New(msg)
+		}
+		time.Sleep(time.Second)
+	}
+}
+
 func (c *ISCSIConnector) connectMultipathDevice(
 	ctx context.Context, sessions []goiscsi.ISCSISession, info ISCSIVolumeInfo) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.connectMultipathDevice")()
@@ -467,7 +566,6 @@ func (c *ISCSIConnector) connectMultipathDevice(
 		time.Sleep(time.Second)
 	}
 }
-
 func (c *ISCSIConnector) validateISCSIVolumeInfo(ctx context.Context, info ISCSIVolumeInfo) error {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.validateISCSIVolumeInfo")()
 	if len(info.Targets) == 0 {

@@ -30,10 +30,12 @@ import (
 
 	"github.com/dell/gobrick/internal/logger"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
+	intpowerpath "github.com/dell/gobrick/internal/powerpath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/dell/gobrick/pkg/multipath"
+	"github.com/dell/gobrick/pkg/powerpath"
 	"github.com/dell/gobrick/pkg/scsi"
 	"golang.org/x/sync/semaphore"
 )
@@ -64,15 +66,17 @@ type FCConnectorParams struct {
 // NewFCConnector create new FCConnector
 func NewFCConnector(params FCConnectorParams) *FCConnector {
 	mp := multipath.NewMultipath(params.Chroot)
+	pp := powerpath.NewPowerpath(params.Chroot)
 	s := scsi.NewSCSI(params.Chroot)
 
 	conn := &FCConnector{
 		multipath: mp,
+		powerpath: pp,
 		scsi:      s,
 		filePath:  &wrp.FilepathWrapper{},
 		os:        &wrp.OSWrapper{},
 		ioutil:    &wrp.IOUTILWrapper{},
-		baseConnector: newBaseConnector(mp, s,
+		baseConnector: newBaseConnector(mp, pp, s,
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
 				MultipathFlushRetryTimeout: params.MultipathFlushRetryTimeout,
@@ -113,6 +117,7 @@ type FCHBA struct {
 type FCConnector struct {
 	baseConnector *baseConnector
 	multipath     intmultipath.Multipath
+	powerpath     intpowerpath.Powerpath
 	scsi          intscsi.SCSI
 
 	//wrappers
@@ -251,7 +256,14 @@ func (fc *FCConnector) connectDevice(
 
 	var device string
 	var isMP bool
-	if !fc.multipath.IsDaemonRunning(ctx) {
+	if fc.powerpath.IsDaemonRunning(ctx) {
+		device, err = fc.waitPowerpathDevice(ctx, wwn, devices)
+		if err != nil {
+			msg := "failed to find powerpath device"
+			logger.Error(ctx, msg)
+			return Device{}, errors.New(msg)
+		}
+	} else if !fc.multipath.IsDaemonRunning(ctx) {
 		device, err = fc.waitSingleDevice(ctx, wwn, devices)
 		if err != nil {
 			return Device{}, err
@@ -265,7 +277,6 @@ func (fc *FCConnector) connectDevice(
 			return Device{}, errors.New(msg)
 		}
 	}
-
 	if !fc.scsi.CheckDeviceIsValid(ctx, path.Join("/dev/", device)) {
 		msg := "multipath device was found but failed to read data from it"
 		logger.Error(ctx, msg)
@@ -335,6 +346,33 @@ func (fc *FCConnector) waitMultipathDevice(
 	}
 	logger.Info(ctx, "multipath device for WWN %s found: %s", wwn, mpath)
 	return mpath, nil
+}
+func (fc *FCConnector) waitPowerpathDevice(
+	ctx context.Context, wwn string, devices []string) (string, error) {
+	defer tracer.TraceFuncCall(ctx, "FCConnector.waitPowerpathDevice")()
+	var ppath string
+	for i := 0; i < int(fc.waitDeviceRegisterTimeout.Seconds()); i++ {
+		select {
+		case <-ctx.Done():
+			return "", errors.New("PowerpathDevice canceled")
+		default:
+		}
+		resp, err := fc.powerpath.GetPowerPathDevices(ctx, devices)
+		if err == nil {
+			if err := fc.scsi.WaitUdevSymlink(ctx, resp, wwn); err == nil {
+				ppath = resp
+				break
+			}
+		}
+		time.Sleep(time.Second)
+	}
+	if ppath == "" {
+		msg := fmt.Sprintf("powerpath device for WWN %s not found", wwn)
+		logger.Error(ctx, msg)
+		return "", errors.New(msg)
+	}
+	logger.Info(ctx, "powerpath device for WWN %s found: %s", wwn, ppath)
+	return ppath, nil
 }
 
 func (fc *FCConnector) waitForDeviceWWN(

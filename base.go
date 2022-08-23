@@ -28,6 +28,7 @@ import (
 
 	"github.com/dell/gobrick/internal/logger"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
+	intpowerpath "github.com/dell/gobrick/internal/powerpath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
 	"github.com/dell/gobrick/internal/tracer"
 )
@@ -45,9 +46,10 @@ type baseConnectorParams struct {
 	MultipathFlushRetryTimeout time.Duration
 }
 
-func newBaseConnector(mp intmultipath.Multipath, s intscsi.SCSI, params baseConnectorParams) *baseConnector {
+func newBaseConnector(mp intmultipath.Multipath, pp intpowerpath.Powerpath, s intscsi.SCSI, params baseConnectorParams) *baseConnector {
 	conn := &baseConnector{
 		multipath: mp,
+		powerpath: pp,
 		scsi:      s,
 	}
 
@@ -56,6 +58,7 @@ func newBaseConnector(mp intmultipath.Multipath, s intscsi.SCSI, params baseConn
 	} else {
 		conn.multipathFlushRetries = params.MultipathFlushRetries
 	}
+
 	setTimeouts(&conn.multipathFlushTimeout,
 		params.MultipathFlushTimeout, multipathFlushTimeoutDefault)
 	setTimeouts(&conn.multipathFlushRetryTimeout,
@@ -66,6 +69,7 @@ func newBaseConnector(mp intmultipath.Multipath, s intscsi.SCSI, params baseConn
 
 type baseConnector struct {
 	multipath intmultipath.Multipath
+	powerpath intpowerpath.Powerpath
 	scsi      intscsi.SCSI
 
 	multipathFlushRetries      int
@@ -189,6 +193,12 @@ func (bc *baseConnector) cleanDevices(ctx context.Context,
 		}
 		if dm != "" {
 			_ = bc.multipath.DelPath(ctx, path.Join("/dev", d))
+		}
+	}
+	if bc.powerpath.IsDaemonRunning(ctx) {
+		err = bc.powerpath.FlushDevice(ctx)
+		if err != nil {
+			return err
 		}
 	}
 	return nil

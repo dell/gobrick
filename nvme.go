@@ -29,10 +29,12 @@ import (
 
 	"github.com/dell/gobrick/internal/logger"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
+	intpowerpath "github.com/dell/gobrick/internal/powerpath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/dell/gobrick/pkg/multipath"
+	"github.com/dell/gobrick/pkg/powerpath"
 	"github.com/dell/gobrick/pkg/scsi"
 	"github.com/dell/gonvme"
 	log "github.com/sirupsen/logrus"
@@ -86,14 +88,16 @@ type FCHBAInfo struct {
 // NewNVMeConnector - get new NVMeConnector
 func NewNVMeConnector(params NVMeConnectorParams) *NVMeConnector {
 	mp := multipath.NewMultipath(params.Chroot)
+	pp := powerpath.NewPowerpath(params.Chroot)
 	s := scsi.NewSCSI(params.Chroot)
 
 	conn := &NVMeConnector{
 		multipath: mp,
+		powerpath: pp,
 		scsi:      s,
 		filePath:  &wrp.FilepathWrapper{},
 		ioutil:    &wrp.IOUTILWrapper{},
-		baseConnector: newBaseConnector(mp, s,
+		baseConnector: newBaseConnector(mp, pp, s,
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
 				MultipathFlushRetryTimeout: params.MultipathFlushRetryTimeout,
@@ -129,6 +133,7 @@ func NewNVMeConnector(params NVMeConnectorParams) *NVMeConnector {
 type NVMeConnector struct {
 	baseConnector *baseConnector
 	multipath     intmultipath.Multipath
+	powerpath     intpowerpath.Powerpath
 	scsi          intscsi.SCSI
 	nvmeLib       wrp.NVMe
 

@@ -783,8 +783,8 @@ func (c *ISCSIConnector) tryEnableManualISCSISessionMGMT(ctx context.Context, ta
 func (c *ISCSIConnector) isISCSISessionActive(
 	ctx context.Context, session goiscsi.ISCSISession) bool {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.isISCSISessionActive")()
-	return session.ISCSISessionState == goiscsi.ISCSISessionState_LOGGED_IN &&
-		session.ISCSIConnectionState == goiscsi.ISCSIConnectionState_LOGGED_IN
+	return session.ISCSISessionState == goiscsi.ISCSISessionStateLOGGEDIN &&
+		session.ISCSIConnectionState == goiscsi.ISCSIConnectionStateLOGGEDIN
 }
 
 func (c *ISCSIConnector) getSessionByTargetInfo(ctx context.Context,

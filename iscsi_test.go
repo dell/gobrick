@@ -53,8 +53,8 @@ var (
 		IfaceTransport:       "tcp",
 		IfaceInitiatorname:   validISCSIInitiatorName,
 		IfaceIPaddress:       "192.168.100.10",
-		ISCSISessionState:    goiscsi.ISCSISessionState_LOGGED_IN,
-		ISCSIConnectionState: goiscsi.ISCSIConnectionState_LOGGED_IN,
+		ISCSISessionState:    goiscsi.ISCSISessionStateLOGGEDIN,
+		ISCSIConnectionState: goiscsi.ISCSIConnectionStateLOGGEDIN,
 	}
 	validLibISCSISession2 = goiscsi.ISCSISession{
 		Target:               validISCSITarget2,
@@ -63,8 +63,8 @@ var (
 		IfaceTransport:       "tcp",
 		IfaceInitiatorname:   validISCSIInitiatorName,
 		IfaceIPaddress:       "192.168.100.11",
-		ISCSISessionState:    goiscsi.ISCSISessionState_LOGGED_IN,
-		ISCSIConnectionState: goiscsi.ISCSIConnectionState_LOGGED_IN,
+		ISCSISessionState:    goiscsi.ISCSISessionStateLOGGEDIN,
+		ISCSIConnectionState: goiscsi.ISCSIConnectionStateLOGGEDIN,
 	}
 	validLibISCSISessions = []goiscsi.ISCSISession{validLibISCSISession1, validLibISCSISession2}
 )

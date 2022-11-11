@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/dell/goiscsi v1.5.0
-	github.com/dell/gonvme v1.2.1-0.20221031105921-1dd1b2410cf3
+	github.com/dell/gonvme v1.2.1-0.20221111064610-e2ea406d3203
 	github.com/golang/mock v1.3.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.4.0

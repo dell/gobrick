@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"github.com/opiproject/goopicsi"
 	"path"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -177,7 +176,7 @@ func singleCallKeyForNVMeTargets(info NVMeVolumeInfo) string {
 }
 
 // ConnectVolume - connect to nvme volume
-func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo, useFC bool, useDPU bool) (Device, error) {
+func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.ConnectVolume")()
 	if err := c.limiter.Acquire(ctx, 1); err != nil {
 		return Device{}, errors.New("too many parallel operations. try later")
@@ -206,14 +205,14 @@ func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo, 
 
 	if multipathIsEnabled {
 		logger.Info(ctx, "start multipath device connection")
-		d, err = c.connectMultipathDevice(ctx, sessions, info, useFC, useDPU)
+		d, err = c.connectMultipathDevice(ctx, sessions, info, useFC, useDPU, subsystemID)
 		if err != nil {
 			logger.Info(ctx, "start single device connection")
-			d, err = c.connectSingleDevice(ctx, info, useFC, useDPU)
+			d, err = c.connectSingleDevice(ctx, info, useFC, useDPU, subsystemID)
 		}
 	} else {
 		logger.Info(ctx, "start single device connection")
-		d, err = c.connectSingleDevice(ctx, info, useFC, useDPU)
+		d, err = c.connectSingleDevice(ctx, info, useFC, useDPU, subsystemID)
 	}
 
 	if err == nil {
@@ -298,7 +297,7 @@ func (c *NVMeConnector) cleanConnection(ctx context.Context, force bool, info NV
 	return c.baseConnector.cleanNVMeDevices(ctx, force, devices)
 }
 
-func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolumeInfo, useFC bool, useDPU bool) (Device, error) {
+func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.connectSingleDevice")()
 	devCH := make(chan DevicePathResult)
 	wg := sync.WaitGroup{}
@@ -306,7 +305,7 @@ func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolume
 	defer cFunc()
 
 	wg.Add(1)
-	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC, useDPU)
+	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC, useDPU, subsystemID)
 	// for non blocking wg wait
 	wgCH := make(chan struct{})
 	go func() {
@@ -369,7 +368,7 @@ func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolume
 }
 
 func (c *NVMeConnector) connectMultipathDevice(
-	ctx context.Context, sessions []gonvme.NVMESession, info NVMeVolumeInfo, useFC bool, useDPU bool) (Device, error) {
+	ctx context.Context, sessions []gonvme.NVMESession, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.connectMultipathDevice")()
 	devCH := make(chan DevicePathResult)
 	wg := sync.WaitGroup{}
@@ -377,7 +376,7 @@ func (c *NVMeConnector) connectMultipathDevice(
 	defer cFunc()
 
 	wg.Add(1)
-	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC, useDPU)
+	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC, useDPU, subsystemID)
 	// for non blocking wg wait
 	wgCH := make(chan struct{})
 	go func() {
@@ -481,23 +480,18 @@ func (c *NVMeConnector) validateNVMeVolumeInfo(ctx context.Context, info NVMeVol
 	return nil
 }
 
-func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, result chan DevicePathResult, info NVMeVolumeInfo, useFC bool, useDPU bool) {
+func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, result chan DevicePathResult, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.findDevice")()
 	defer wg.Done()
 	wwn := info.WWN
 	nguid := info.NGUID
 	var devicePathResult DevicePathResult
 
-	// Using wwn as the namespace ID and host ID, considering it as the unique identifier for a volume
+	// Using wwn as the namespace ID, considering it as the unique identifier for a volume
 	if useDPU {
-		hostID, err := strconv.ParseInt(wwn, 10, 32)
+		_, err := goopicsi.CreateNVMeNamespace(wwn, subsystemID, nguid, 1)
 		if err != nil {
-			log.Errorf("could not find the host ID: %v", err.Error())
-		} else {
-			_, err = goopicsi.CreateNVMeNamespace(wwn, "nqn.2016-06.io.spdk:cnode1", nguid, int32(hostID))
-			if err != nil {
-				log.Errorf("Error while creating namespace: %v", err.Error())
-			}
+			log.Errorf("Error while creating namespace: %v", err.Error())
 		}
 	}
 	retryCount := 0

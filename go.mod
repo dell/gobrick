@@ -3,7 +3,7 @@ module github.com/dell/gobrick
 go 1.18
 
 require (
-	github.com/dell/goiscsi v1.5.0
+	github.com/dell/goiscsi v1.5.1-0.20221129092433-7ef440459661
 	github.com/dell/gonvme v1.2.1-0.20221125163719-e388aeb3ebfe
 	github.com/golang/mock v1.3.1
 	github.com/sirupsen/logrus v1.8.1

@@ -1,10 +1,10 @@
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/dell/goiscsi v1.5.1-0.20221129092433-7ef440459661 h1:wJMTcaWuKqFel2wBIPNgq2iXaZXhjiBXn2znk73LRbU=
-github.com/dell/goiscsi v1.5.1-0.20221129092433-7ef440459661/go.mod h1:hNS7UZhjblSykVRHPv8slHNL2RdbR/1rtfKOckld598=
-github.com/dell/gonvme v1.2.1-0.20221125163719-e388aeb3ebfe h1:lhTjh4AVZRLz/LoAkHVbtGxr0/THTZTOm5QVDZ6dplw=
-github.com/dell/gonvme v1.2.1-0.20221125163719-e388aeb3ebfe/go.mod h1:qVUW4Z4ijkD5xXyn1Fl3h8pMcMBH+GjrvZy4OsQNRYs=
+github.com/dell/goiscsi v1.6.0 h1:sdffJtVkjXgmcFJEkyv0sbjde24HHc/6qCRVAV4wUho=
+github.com/dell/goiscsi v1.6.0/go.mod h1:hNS7UZhjblSykVRHPv8slHNL2RdbR/1rtfKOckld598=
+github.com/dell/gonvme v1.3.0 h1:IkcZLesdBWKomawZkO2sI1H41xG7lLxHQtanx/Wyku4=
+github.com/dell/gonvme v1.3.0/go.mod h1:qVUW4Z4ijkD5xXyn1Fl3h8pMcMBH+GjrvZy4OsQNRYs=
 github.com/golang/mock v1.3.1 h1:qGJ6qTW+x6xX/my+8YUVl4WNpX9B7+/l2tRsHGZ7f2s=
 github.com/golang/mock v1.3.1/go.mod h1:sBzyDLLjw3U8JLTeZvSv8jJB+tU5PVekmnlKIyFUx0Y=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

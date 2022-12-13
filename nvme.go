@@ -205,13 +205,16 @@ func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo, 
 
 	if multipathIsEnabled {
 		logger.Info(ctx, "start multipath device connection")
+		// Separate function of connectMultipathDevice will be added later for backward compatibility
 		d, err = c.connectMultipathDevice(ctx, sessions, info, useFC, useDPU, subsystemID)
 		if err != nil {
 			logger.Info(ctx, "start single device connection")
+			// Separate function of connectSingleDevice will be added later for backward compatibility
 			d, err = c.connectSingleDevice(ctx, info, useFC, useDPU, subsystemID)
 		}
 	} else {
 		logger.Info(ctx, "start single device connection")
+		// Separate function of connectSingleDevice will be added later for backward compatibility
 		d, err = c.connectSingleDevice(ctx, info, useFC, useDPU, subsystemID)
 	}
 
@@ -305,6 +308,7 @@ func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolume
 	defer cFunc()
 
 	wg.Add(1)
+	// Separate function of discoverDevice will be added later for backward compatibility
 	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC, useDPU, subsystemID)
 	// for non blocking wg wait
 	wgCH := make(chan struct{})
@@ -376,6 +380,7 @@ func (c *NVMeConnector) connectMultipathDevice(
 	defer cFunc()
 
 	wg.Add(1)
+	// Separate function of discoverDevice will be added later for backward compatibility
 	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC, useDPU, subsystemID)
 	// for non blocking wg wait
 	wgCH := make(chan struct{})

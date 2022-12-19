@@ -12,10 +12,6 @@ require (
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 )
 
-replace (
-	github.com/opiproject/goopicsi => ../goopicsi
-)
-
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect

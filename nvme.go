@@ -176,7 +176,7 @@ func singleCallKeyForNVMeTargets(info NVMeVolumeInfo) string {
 }
 
 // ConnectVolume - connect to nvme volume
-func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string) (Device, error) {
+func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string, hostID int32) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.ConnectVolume")()
 	if err := c.limiter.Acquire(ctx, 1); err != nil {
 		return Device{}, errors.New("too many parallel operations. try later")
@@ -206,16 +206,16 @@ func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo, 
 	if multipathIsEnabled {
 		logger.Info(ctx, "start multipath device connection")
 		// Separate function of connectMultipathDevice will be added later for backward compatibility
-		d, err = c.connectMultipathDevice(ctx, sessions, info, useFC, useDPU, subsystemID)
+		d, err = c.connectMultipathDevice(ctx, sessions, info, useFC, useDPU, subsystemID, hostID)
 		if err != nil {
 			logger.Info(ctx, "start single device connection")
 			// Separate function of connectSingleDevice will be added later for backward compatibility
-			d, err = c.connectSingleDevice(ctx, info, useFC, useDPU, subsystemID)
+			d, err = c.connectSingleDevice(ctx, info, useFC, useDPU, subsystemID, hostID)
 		}
 	} else {
 		logger.Info(ctx, "start single device connection")
 		// Separate function of connectSingleDevice will be added later for backward compatibility
-		d, err = c.connectSingleDevice(ctx, info, useFC, useDPU, subsystemID)
+		d, err = c.connectSingleDevice(ctx, info, useFC, useDPU, subsystemID, hostID)
 	}
 
 	if err == nil {
@@ -300,7 +300,7 @@ func (c *NVMeConnector) cleanConnection(ctx context.Context, force bool, info NV
 	return c.baseConnector.cleanNVMeDevices(ctx, force, devices)
 }
 
-func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string) (Device, error) {
+func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string, hostID int32) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.connectSingleDevice")()
 	devCH := make(chan DevicePathResult)
 	wg := sync.WaitGroup{}
@@ -309,7 +309,7 @@ func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolume
 
 	wg.Add(1)
 	// Separate function of discoverDevice will be added later for backward compatibility
-	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC, useDPU, subsystemID)
+	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC, useDPU, subsystemID, hostID)
 	// for non blocking wg wait
 	wgCH := make(chan struct{})
 	go func() {
@@ -372,7 +372,7 @@ func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolume
 }
 
 func (c *NVMeConnector) connectMultipathDevice(
-	ctx context.Context, sessions []gonvme.NVMESession, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string) (Device, error) {
+	ctx context.Context, sessions []gonvme.NVMESession, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string, hostID int32) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.connectMultipathDevice")()
 	devCH := make(chan DevicePathResult)
 	wg := sync.WaitGroup{}
@@ -381,7 +381,7 @@ func (c *NVMeConnector) connectMultipathDevice(
 
 	wg.Add(1)
 	// Separate function of discoverDevice will be added later for backward compatibility
-	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC, useDPU, subsystemID)
+	go c.discoverDevice(discoveryCtx, &wg, devCH, info, useFC, useDPU, subsystemID, hostID)
 	// for non blocking wg wait
 	wgCH := make(chan struct{})
 	go func() {
@@ -485,7 +485,7 @@ func (c *NVMeConnector) validateNVMeVolumeInfo(ctx context.Context, info NVMeVol
 	return nil
 }
 
-func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, result chan DevicePathResult, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string) {
+func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, result chan DevicePathResult, info NVMeVolumeInfo, useFC bool, useDPU bool, subsystemID string, hostID int32) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.findDevice")()
 	defer wg.Done()
 	wwn := info.WWN
@@ -494,7 +494,7 @@ func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, 
 
 	// Using wwn as the namespace ID, considering it as the unique identifier for a volume
 	if useDPU {
-		_, err := goopicsi.CreateNVMeNamespace(wwn, subsystemID, nguid, 1)
+		_, err := goopicsi.CreateNVMeNamespace(wwn, subsystemID, nguid, hostID)
 		if err != nil {
 			log.Errorf("Error while creating namespace: %v", err.Error())
 		}

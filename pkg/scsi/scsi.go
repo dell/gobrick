@@ -24,12 +24,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"os"
 	"path"
 	"sort"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
@@ -53,6 +54,7 @@ const (
 // NewSCSI initializes scsi struct
 func NewSCSI(chroot string) *Scsi {
 	scsi := &Scsi{
+		chroot:     chroot,
 		fileReader: &wrp.IOUTILWrapper{},
 		filePath:   &wrp.FilepathWrapper{},
 		os:         &wrp.OSWrapper{},
@@ -149,7 +151,8 @@ func (s *Scsi) GetDevicesByWWN(ctx context.Context, wwn string) ([]string, error
 
 // DeleteSCSIDeviceByPath deletes device by specified "device folder" path
 // Examples:
-// 		/sys/block/sde/device/
+//
+//		/sys/block/sde/device/
 //		/sys/class/scsi_device/37:0:0:1/device/
 //	    /sys/class/iscsi_session/session3/device/target37:0:0/37:0:0:1/
 func (s *Scsi) DeleteSCSIDeviceByPath(ctx context.Context, devPath string) error {
@@ -302,7 +305,8 @@ func (s *Scsi) readWWIDFile(ctx context.Context, path string) (string, error) {
 
 // delete device by specified "device folder" path
 // Examples:
-// 		/sys/block/sde/device/
+//
+//		/sys/block/sde/device/
 //		/sys/class/scsi_device/37:0:0:1/device/
 //	    /sys/class/iscsi_session/session3/device/target37:0:0/37:0:0:1/
 func (s *Scsi) deleteSCSIDeviceByPath(ctx context.Context, devPath string) error {
@@ -372,7 +376,7 @@ func (s *Scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (str
 	return "", errors.New("dm not found")
 }
 
-//GetNVMEMultipathDMName finds the multipath DM mame for NVMe
+// GetNVMEMultipathDMName finds the multipath DM mame for NVMe
 func (s *Scsi) GetNVMEMultipathDMName(device string, pattern string) ([]string, error) {
 
 	var retryCount = 0
@@ -569,7 +573,7 @@ func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 	return nil
 }
 
-//GetNVMESymlink return the NVMe symlink for the given path
+// GetNVMESymlink return the NVMe symlink for the given path
 func (s *Scsi) GetNVMESymlink(checkPath string) (string, error) {
 
 	var retryCount = 1

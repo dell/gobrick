@@ -87,6 +87,12 @@ func (mp *Powerpath) isDaemonRunning(ctx context.Context) bool {
 		logger.Info(ctx, "powerpath - daemon not started")
 		return false
 	}
+	resp, err = mp.runCommand(ctx, powerpathDaemon, []string{"check", "force"})
+	if err != nil {
+		if strings.Contains(string(resp), "not found") {
+			logger.Info(ctx, "no stale devices found")
+		}
+	}
 	return true
 }
 func (mp *Powerpath) getPowerPathDevices(ctx context.Context, devices []string) (string, error) {

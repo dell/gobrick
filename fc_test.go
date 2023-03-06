@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	intpowerpath "github.com/dell/gobrick/internal/powerpath"
+
 	"github.com/dell/gobrick/internal/mockhelper"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
@@ -47,6 +49,7 @@ var (
 type fcFields struct {
 	baseConnector             *baseConnector
 	multipath                 *intmultipath.MockMultipath
+	powerpath                 *intpowerpath.MockPowerpath
 	scsi                      *intscsi.MockSCSI
 	filePath                  *wrp.MockLimitedFilepath
 	os                        *wrp.MockLimitedOS
@@ -59,12 +62,14 @@ func getDefaultFCFields(ctrl *gomock.Controller) fcFields {
 	con := NewFCConnector(FCConnectorParams{})
 	bc := con.baseConnector
 	mpMock := intmultipath.NewMockMultipath(ctrl)
+	ppMock := intpowerpath.NewMockPowerpath(ctrl)
 	scsiMock := intscsi.NewMockSCSI(ctrl)
 	bc.multipath = mpMock
 	bc.scsi = scsiMock
 	f := fcFields{
 		baseConnector:             bc,
 		multipath:                 mpMock,
+		powerpath:                 ppMock,
 		scsi:                      scsiMock,
 		filePath:                  wrp.NewMockLimitedFilepath(ctrl),
 		os:                        wrp.NewMockLimitedOS(ctrl),
@@ -328,6 +333,7 @@ func TestFCConnector_ConnectVolume(t *testing.T) {
 			fc := &FCConnector{
 				baseConnector:             tt.fields.baseConnector,
 				multipath:                 tt.fields.multipath,
+				powerpath:                 tt.fields.powerpath,
 				scsi:                      tt.fields.scsi,
 				filePath:                  tt.fields.filePath,
 				os:                        tt.fields.os,

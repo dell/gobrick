@@ -56,18 +56,20 @@ type Multipath struct {
 }
 
 // AddWWID add wwid to the list of know multipath wwids.
-//        This has the effect of multipathd being willing to create a dm for a
-//        multipath even when there's only 1 device.
+//
+//	This has the effect of multipathd being willing to create a dm for a
+//	multipath even when there's only 1 device.
 func (mp *Multipath) AddWWID(ctx context.Context, wwid string) error {
 	defer tracer.TraceFuncCall(ctx, "multipath.AddWWID")()
 	return mp.addWWID(ctx, wwid)
 }
 
 // AddPath add a path to multipathd for monitoring.
-//        This has the effect of multipathd checking an already checked device
-//        for multipath.
-//        Together with `multipath_add_wwid` we can create a multipath when
-//        there's only 1 path.
+//
+//	This has the effect of multipathd checking an already checked device
+//	for multipath.
+//	Together with `multipath_add_wwid` we can create a multipath when
+//	there's only 1 path.
 func (mp *Multipath) AddPath(ctx context.Context, path string) error {
 	defer tracer.TraceFuncCall(ctx, "multipath.AddPath")()
 	return mp.changePath(ctx, "add", path)

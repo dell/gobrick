@@ -1,6 +1,6 @@
 module github.com/dell/gobrick
 
-go 1.20
+go 1.21
 
 require (
 	github.com/dell/goiscsi v1.7.0

@@ -91,15 +91,6 @@ type OSExecWrapper struct{}
 func (w *OSExecWrapper) CommandContext(ctx context.Context, name string, arg ...string) LimitedOSExecCmd {
 	return exec.CommandContext(ctx, name, arg...)
 }
-
-// OSWrapper contains implementation of LimitedOS interface
-type OSWrapper struct{}
-
-// ReadFile is a wrapper of os.ReadFile
-func (os *OSWrapper) ReadFile(filename string) ([]byte, error) {
-	return os.ReadFile(filepath.Clean(filename))
-}
-
 // FilepathWrapper contains implementation of LimitedFilePath interface
 type FilepathWrapper struct{}
 
@@ -115,6 +106,11 @@ func (io *FilepathWrapper) EvalSymlinks(path string) (string, error) {
 
 // OSWrapper contains implementation of LimitedOS interface
 type OSWrapper struct{}
+
+// ReadFile is a wrapper of os.ReadFile
+func (os *OSWrapper) ReadFile(filename string) ([]byte, error) {
+	return os.ReadFile(filepath.Clean(filename))
+}
 
 // OpenFile is a wrapper of os.OpenFile
 func (io *OSWrapper) OpenFile(name string, flag int, perm os.FileMode) (LimitedFile, error) {

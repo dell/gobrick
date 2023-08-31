@@ -17,7 +17,6 @@ package wrappers
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,8 +46,8 @@ type LimitedOSExecCmd interface {
 	CombinedOutput() ([]byte, error)
 }
 
-// LimitedIOUtil defines limited ioutil interface
-type LimitedIOUtil interface {
+// LimitedOS defines limited os interface
+type LimitedOS interface {
 	ReadFile(filename string) ([]byte, error)
 }
 
@@ -98,12 +97,12 @@ func (w *OSExecWrapper) CommandContext(ctx context.Context, name string, arg ...
 	return exec.CommandContext(ctx, name, arg...)
 }
 
-// IOUTILWrapper contains implementation of LimitedIOUtil interface
-type IOUTILWrapper struct{}
+// OSWrapper contains implementation of LimitedOS interface
+type OSWrapper struct{}
 
-// ReadFile is a wrapper of ioutil.ReadFile
-func (io *IOUTILWrapper) ReadFile(filename string) ([]byte, error) {
-	return ioutil.ReadFile(filepath.Clean(filename))
+// ReadFile is a wrapper of os.ReadFile
+func (os *OSWrapper) ReadFile(filename string) ([]byte, error) {
+	return os.ReadFile(filepath.Clean(filename))
 }
 
 // FilepathWrapper contains implementation of LimitedFilePath interface

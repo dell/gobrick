@@ -45,12 +45,6 @@ type LimitedOSExec interface {
 type LimitedOSExecCmd interface {
 	CombinedOutput() ([]byte, error)
 }
-
-// LimitedOS defines limited os interface
-type LimitedOS interface {
-	ReadFile(filename string) ([]byte, error)
-}
-
 // LimitedFilepath defines limited file path interface
 type LimitedFilepath interface {
 	Glob(pattern string) (matches []string, err error)
@@ -64,6 +58,7 @@ type LimitedOS interface {
 	IsNotExist(err error) bool
 	Mkdir(name string, perm os.FileMode) error
 	Remove(name string) error
+	ReadFile(filename string) ([]byte, error)
 }
 
 // ISCSILib defines iscsi function spec

@@ -53,7 +53,6 @@ type fcFields struct {
 	scsi                      *intscsi.MockSCSI
 	filePath                  *wrp.MockLimitedFilepath
 	os                        *wrp.MockLimitedOS
-	ioutil                    *wrp.MockLimitedIOUtil
 	limiter                   *semaphore.Weighted
 	waitDeviceRegisterTimeout time.Duration
 }
@@ -73,7 +72,6 @@ func getDefaultFCFields(ctrl *gomock.Controller) fcFields {
 		scsi:                      scsiMock,
 		filePath:                  wrp.NewMockLimitedFilepath(ctrl),
 		os:                        wrp.NewMockLimitedOS(ctrl),
-		ioutil:                    wrp.NewMockLimitedIOUtil(ctrl),
 		limiter:                   con.limiter,
 		waitDeviceRegisterTimeout: con.waitDeviceRegisterTimeout,
 	}
@@ -81,8 +79,7 @@ func getDefaultFCFields(ctrl *gomock.Controller) fcFields {
 }
 
 func getFCHBASInfoMock(mock *baseMockHelper,
-	os *wrp.MockLimitedOS,
-	ioutil *wrp.MockLimitedIOUtil, filepath *wrp.MockLimitedFilepath) {
+	os *wrp.MockLimitedOS, filepath *wrp.MockLimitedFilepath) {
 	isFCSupportedMock(mock, os)
 	sysPath := "/sys/class/fc_host/host"
 	sysPathGlob := sysPath + "*"
@@ -92,19 +89,19 @@ func getFCHBASInfoMock(mock *baseMockHelper,
 	mock.FilePathGlobOKReturn = []string{host1Path, host2Path}
 	mock.FilePathGlobOK(filepath)
 
-	mock.IOUTILReadFileCallPath = host1Path + "/port_name"
-	mock.IOUTILReadFileOKReturn = "0x" + validWWPN1
-	mock.IOUTILReadFileOK(ioutil)
-	mock.IOUTILReadFileCallPath = host1Path + "/node_name"
-	mock.IOUTILReadFileOKReturn = "0x" + validNodeName1
-	mock.IOUTILReadFileOK(ioutil)
+	mock.OSReadFileCallPath = host1Path + "/port_name"
+	mock.OSReadFileOKReturn = "0x" + validWWPN1
+	mock.OSReadFileOK(os)
+	mock.OSReadFileCallPath = host1Path + "/node_name"
+	mock.OSReadFileOKReturn = "0x" + validNodeName1
+	mock.OSReadFileOK(os)
 
-	mock.IOUTILReadFileCallPath = host2Path + "/port_name"
-	mock.IOUTILReadFileOKReturn = "0x" + validWWPN2
-	mock.IOUTILReadFileOK(ioutil)
-	mock.IOUTILReadFileCallPath = host2Path + "/node_name"
-	mock.IOUTILReadFileOKReturn = "0x" + validNodeName2
-	mock.IOUTILReadFileOK(ioutil)
+	mock.OSReadFileCallPath = host2Path + "/port_name"
+	mock.OSReadFileOKReturn = "0x" + validWWPN2
+	mock.OSReadFileOK(os)
+	mock.OSReadFileCallPath = host2Path + "/node_name"
+	mock.OSReadFileOKReturn = "0x" + validNodeName2
+	mock.OSReadFileOK(os)
 }
 
 func isFCSupportedMock(mock *baseMockHelper, os *wrp.MockLimitedOS) {
@@ -116,9 +113,8 @@ func isFCSupportedMock(mock *baseMockHelper, os *wrp.MockLimitedOS) {
 
 func waitForDeviceWWNMock(mock *baseMockHelper,
 	filepath *wrp.MockLimitedFilepath,
-	ioutil *wrp.MockLimitedIOUtil,
 	scsi *intscsi.MockSCSI) {
-	findHCTLsForFCHBAMock(mock, filepath, ioutil)
+	findHCTLsForFCHBAMock(mock, filepath, os)
 
 	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1
 	mock.SCSIGetDeviceNameByHCTLErr(scsi)
@@ -129,7 +125,7 @@ func waitForDeviceWWNMock(mock *baseMockHelper,
 	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1Target1
 	mock.SCSIGetDeviceNameByHCTLErr(scsi)
 
-	findHCTLsForFCHBAMock(mock, filepath, ioutil)
+	findHCTLsForFCHBAMock(mock, filepath, os)
 
 	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1
 	mock.SCSIGetDeviceNameByHCTLOKReturn = mockhelper.ValidDeviceName
@@ -152,7 +148,7 @@ func waitForDeviceWWNMock(mock *baseMockHelper,
 }
 
 func findHCTLsForFCHBAMock(mock *baseMockHelper,
-	filepath *wrp.MockLimitedFilepath, ioutil *wrp.MockLimitedIOUtil) {
+	filepath *wrp.MockLimitedFilepath, os *wrp.MockLimitedOS) {
 
 	sysPath := "/sys/class/fc_transport/target"
 	sysPathGlob1 := sysPath + validSCSIHost1 + ":*"
@@ -172,27 +168,26 @@ func findHCTLsForFCHBAMock(mock *baseMockHelper,
 	mock.FilePathGlobOKReturn = []string{sysPathMatch2}
 	mock.FilePathGlobOK(filepath)
 
-	mock.IOUTILReadFileCallPath = sysPathMatch1 + "/port_name"
-	mock.IOUTILReadFileOKReturn = "0x" + validWWPN1
-	mock.IOUTILReadFileOK(ioutil)
-	mock.IOUTILReadFileCallPath = sysPathMatch1Target1 + "/port_name"
-	mock.IOUTILReadFileOKReturn = "0x" + validWWPN2
-	mock.IOUTILReadFileOK(ioutil)
+	mock.OSReadFileCallPath = sysPathMatch1 + "/port_name"
+	mock.OSReadFileOKReturn = "0x" + validWWPN1
+	mock.OSReadFileOK(os)
+	mock.OSReadFileCallPath = sysPathMatch1Target1 + "/port_name"
+	mock.OSReadFileOKReturn = "0x" + validWWPN2
+	mock.OSReadFileOK(os)
 
-	mock.IOUTILReadFileCallPath = sysPathMatch2 + "/port_name"
-	mock.IOUTILReadFileOKReturn = "0x" + validWWPN2
-	mock.IOUTILReadFileOK(ioutil)
+	mock.OSReadFileCallPath = sysPathMatch2 + "/port_name"
+	mock.OSReadFileOKReturn = "0x" + validWWPN2
+	mock.OSReadFileOK(os)
 }
 
 func cleanConnectionMock(mock *baseMockHelper,
 	filepath *wrp.MockLimitedFilepath,
-	ioutil *wrp.MockLimitedIOUtil,
 	os *wrp.MockLimitedOS,
 	scsi *intscsi.MockSCSI,
 	multipath *intmultipath.MockMultipath) {
 
-	getFCHBASInfoMock(mock, os, ioutil, filepath)
-	findHCTLsForFCHBAMock(mock, filepath, ioutil)
+	getFCHBASInfoMock(mock, os, filepath)
+	findHCTLsForFCHBAMock(mock, filepath, os)
 
 	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1
 	mock.SCSIGetDeviceNameByHCTLOKReturn = mockhelper.ValidDeviceName
@@ -239,8 +234,8 @@ func TestFCConnector_ConnectVolume(t *testing.T) {
 			name:   "ok-multipath",
 			fields: getDefaultFCFields(ctrl),
 			stateSetter: func(fields fcFields) {
-				getFCHBASInfoMock(&mock, fields.os, fields.ioutil, fields.filePath)
-				waitForDeviceWWNMock(&mock, fields.filePath, fields.ioutil, fields.scsi)
+				getFCHBASInfoMock(&mock, fields.os, fields.filePath)
+				waitForDeviceWWNMock(&mock, fields.filePath, fields.os, fields.scsi)
 				mock.SCSIGetDevicesByWWNCallWWN = mockhelper.ValidWWID
 				mock.SCSIGetDevicesByWWNOKReturn = mockhelper.ValidDevices
 				mock.SCSIGetDevicesByWWNOK(fields.scsi)
@@ -277,8 +272,8 @@ func TestFCConnector_ConnectVolume(t *testing.T) {
 			name:   "ok-single",
 			fields: getDefaultFCFields(ctrl),
 			stateSetter: func(fields fcFields) {
-				getFCHBASInfoMock(&mock, fields.os, fields.ioutil, fields.filePath)
-				waitForDeviceWWNMock(&mock, fields.filePath, fields.ioutil, fields.scsi)
+				getFCHBASInfoMock(&mock, fields.os, fields.filePath)
+				waitForDeviceWWNMock(&mock, fields.filePath, fields.os, fields.scsi)
 				mock.SCSIGetDevicesByWWNCallWWN = mockhelper.ValidWWID
 				mock.SCSIGetDevicesByWWNOKReturn = mockhelper.ValidDevices
 				mock.SCSIGetDevicesByWWNOK(fields.scsi)
@@ -302,8 +297,8 @@ func TestFCConnector_ConnectVolume(t *testing.T) {
 			name:   "connection error",
 			fields: getDefaultFCFields(ctrl),
 			stateSetter: func(fields fcFields) {
-				getFCHBASInfoMock(&mock, fields.os, fields.ioutil, fields.filePath)
-				waitForDeviceWWNMock(&mock, fields.filePath, fields.ioutil, fields.scsi)
+				getFCHBASInfoMock(&mock, fields.os,fields.filePath)
+				waitForDeviceWWNMock(&mock, fields.filePath, fields.os, fields.scsi)
 				mock.SCSIGetDevicesByWWNCallWWN = mockhelper.ValidWWID
 				mock.SCSIGetDevicesByWWNOKReturn = mockhelper.ValidDevices
 				mock.SCSIGetDevicesByWWNOK(fields.scsi)
@@ -319,8 +314,7 @@ func TestFCConnector_ConnectVolume(t *testing.T) {
 				mock.SCSICheckDeviceIsValidCallDevice = mockhelper.ValidDevicePath
 				mock.SCSICheckDeviceIsValidOK(fields.scsi)
 
-				cleanConnectionMock(&mock, fields.filePath, fields.ioutil,
-					fields.os, fields.scsi, fields.multipath)
+				cleanConnectionMock(&mock, fields.filePath, fields.os, fields.scsi, fields.multipath)
 
 			},
 			args:    defaultArgs,
@@ -337,7 +331,6 @@ func TestFCConnector_ConnectVolume(t *testing.T) {
 				scsi:                      tt.fields.scsi,
 				filePath:                  tt.fields.filePath,
 				os:                        tt.fields.os,
-				ioutil:                    tt.fields.ioutil,
 				limiter:                   tt.fields.limiter,
 				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
 			}
@@ -386,8 +379,7 @@ func TestFCConnector_DisconnectVolume(t *testing.T) {
 			fields: getDefaultFCFields(ctrl),
 			stateSetter: func(fields fcFields) {
 				cleanConnectionMock(
-					&mock, fields.filePath,
-					fields.ioutil, fields.os, fields.scsi, fields.multipath)
+					&mock, fields.filePath, fields.os, fields.scsi, fields.multipath)
 			},
 			args:    defaultArgs,
 			wantErr: false,
@@ -401,7 +393,6 @@ func TestFCConnector_DisconnectVolume(t *testing.T) {
 				scsi:                      tt.fields.scsi,
 				filePath:                  tt.fields.filePath,
 				os:                        tt.fields.os,
-				ioutil:                    tt.fields.ioutil,
 				limiter:                   tt.fields.limiter,
 				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
 			}
@@ -459,7 +450,6 @@ func TestFCConnector_DisconnectVolumeByDeviceName(t *testing.T) {
 				scsi:                      tt.fields.scsi,
 				filePath:                  tt.fields.filePath,
 				os:                        tt.fields.os,
-				ioutil:                    tt.fields.ioutil,
 				limiter:                   tt.fields.limiter,
 				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
 			}
@@ -502,7 +492,7 @@ func TestFCConnector_GetInitiatorPorts(t *testing.T) {
 			fields: getDefaultFCFields(ctrl),
 			args:   defaultArgs,
 			stateSetter: func(fields fcFields) {
-				getFCHBASInfoMock(&mock, fields.os, fields.ioutil, fields.filePath)
+				getFCHBASInfoMock(&mock, fields.os, fields.filePath)
 			},
 			want:    []string{validWWPN1, validWWPN2},
 			wantErr: false,
@@ -516,7 +506,6 @@ func TestFCConnector_GetInitiatorPorts(t *testing.T) {
 				scsi:                      tt.fields.scsi,
 				filePath:                  tt.fields.filePath,
 				os:                        tt.fields.os,
-				ioutil:                    tt.fields.ioutil,
 				limiter:                   tt.fields.limiter,
 				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
 			}

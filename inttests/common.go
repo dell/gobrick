@@ -20,7 +20,7 @@ package inttests
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"log"
 	"path/filepath"
 	"strconv"
@@ -28,7 +28,7 @@ import (
 )
 
 func loadTestData(filePathStr string, testConfig interface{}) {
-	data, err := ioutil.ReadFile(filepath.Clean(filePathStr))
+	data, err := os.ReadFile(filepath.Clean(filePathStr))
 	if err != nil {
 		log.Printf("can't read file with test data, "+
 			"please check that file exist: %s",

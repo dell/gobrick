@@ -75,7 +75,6 @@ func NewFCConnector(params FCConnectorParams) *FCConnector {
 		scsi:      s,
 		filePath:  &wrp.FilepathWrapper{},
 		os:        &wrp.OSWrapper{},
-		ioutil:    &wrp.IOUTILWrapper{},
 		baseConnector: newBaseConnector(mp, pp, s,
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
@@ -123,7 +122,6 @@ type FCConnector struct {
 	//wrappers
 	filePath wrp.LimitedFilepath
 	os       wrp.LimitedOS
-	ioutil   wrp.LimitedIOUtil
 
 	limiter *semaphore.Weighted
 
@@ -473,7 +471,7 @@ func (fc *FCConnector) findHCTLsForFCHBA(
 	}
 	targetMap := make(map[string]string)
 	for _, m := range matches {
-		data, err := fc.ioutil.ReadFile(path.Join(m, "port_name"))
+		data, err := fc.os.ReadFile(path.Join(m, "port_name"))
 		if err != nil {
 			msg := fmt.Sprintf("HBA: %s failed to read port_name for FC target: %s", hba, err.Error())
 			logger.Error(ctx, msg)
@@ -538,13 +536,13 @@ func (fc *FCConnector) getFCHBASInfo(ctx context.Context) ([]FCHBA, error) {
 	var hbas []FCHBA
 	for _, m := range match {
 		hba := FCHBA{}
-		data, err := fc.ioutil.ReadFile(path.Join(m, "port_name"))
+		data, err := fc.os.ReadFile(path.Join(m, "port_name"))
 		if err != nil {
 			logger.Error(ctx, "match: %s failed to read port_name file: %s", match, err.Error())
 			continue
 		}
 		hba.PortName = strings.Replace(strings.TrimSpace(string(data)), "0x", "", 1)
-		data, err = fc.ioutil.ReadFile(path.Join(m, "node_name"))
+		data, err = fc.os.ReadFile(path.Join(m, "node_name"))
 		if err != nil {
 			logger.Error(ctx, "match: %s failed to read node_name file: %s", match, err.Error())
 			continue

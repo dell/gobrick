@@ -55,7 +55,6 @@ const (
 func NewSCSI(chroot string) *Scsi {
 	scsi := &Scsi{
 		chroot:     chroot,
-		fileReader: &wrp.IOUTILWrapper{},
 		filePath:   &wrp.FilepathWrapper{},
 		os:         &wrp.OSWrapper{},
 		osexec:     &wrp.OSExecWrapper{},
@@ -93,7 +92,6 @@ func (dperr *DevicesHaveDifferentParentsErr) Error() string {
 type Scsi struct {
 	chroot string
 
-	fileReader wrp.LimitedIOUtil
 	filePath   wrp.LimitedFilepath
 	os         wrp.LimitedOS
 	osexec     wrp.LimitedOSExec
@@ -290,7 +288,7 @@ func (s *Scsi) getDeviceWWNWithSCSIID(ctx context.Context, device string) (strin
 
 func (s *Scsi) readWWIDFile(ctx context.Context, path string) (string, error) {
 	wwnTypes := map[string]string{"t10.": "1", "eui.": "2", "naa.": "3"}
-	data, err := s.fileReader.ReadFile(path)
+	data, err := s.os.ReadFile(path)
 	if err == nil {
 		wwid := strings.TrimSpace(string(data))
 		wwnType, ok := wwnTypes[wwid[:4]]
@@ -313,7 +311,7 @@ func (s *Scsi) deleteSCSIDeviceByPath(ctx context.Context, devPath string) error
 	deletePath := path.Join(devPath, "delete")
 	statePath := path.Join(devPath, "state")
 	// delete command for device in "blocked" state could stuck on 3.x kernel
-	stateContent, err := s.fileReader.ReadFile(statePath)
+	stateContent, err := s.os.ReadFile(statePath)
 	if err != nil {
 		logger.Error(ctx, "can't read %s: %s", statePath, err.Error())
 		return err
@@ -355,7 +353,7 @@ func (s *Scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (str
 			return "", err
 		}
 		for _, m := range matches {
-			data, err := s.fileReader.ReadFile(path.Join(m, "dm/uuid"))
+			data, err := s.os.ReadFile(path.Join(m, "dm/uuid"))
 			if err != nil {
 				logger.Error(ctx, "multipath - failed to read dm id file: %s", err.Error())
 				continue
@@ -403,7 +401,7 @@ func (s *Scsi) getNVMEDMDeviceByChildren(ctx context.Context, devices []string) 
 			return "", err
 		}
 		for _, m := range matches {
-			data, err := s.fileReader.ReadFile(path.Join(m, "dm/uuid"))
+			data, err := s.os.ReadFile(path.Join(m, "dm/uuid"))
 			if err != nil {
 				logger.Error(ctx, "multipath - failed to read dm id file: %s", err.Error())
 				continue

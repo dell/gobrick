@@ -44,7 +44,6 @@ func getHostOnlyHCTL() HCTL {
 
 type scsiFields struct {
 	chroot     string
-	fileReader *wrp.MockLimitedIOUtil
 	filePath   *wrp.MockLimitedFilepath
 	os         *wrp.MockLimitedOS
 	osexec     *wrp.MockLimitedOSExec
@@ -52,13 +51,11 @@ type scsiFields struct {
 }
 
 func getDefaultSCSIFields(ctrl *gomock.Controller) scsiFields {
-	ioutilMock := wrp.NewMockLimitedIOUtil(ctrl)
 	filePathMock := wrp.NewMockLimitedFilepath(ctrl)
 	osMock := wrp.NewMockLimitedOS(ctrl)
 	osExecMock := wrp.NewMockLimitedOSExec(ctrl)
 	return scsiFields{
 		chroot:     testCHRoot,
-		fileReader: ioutilMock,
 		filePath:   filePathMock,
 		os:         osMock,
 		osexec:     osExecMock,
@@ -120,7 +117,6 @@ func Test_scsi_IsDeviceExist(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -207,7 +203,6 @@ func Test_scsi_RescanSCSIHostByHCTL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -304,7 +299,6 @@ func Test_scsi_RescanSCSIDeviceByHCTL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -333,7 +327,7 @@ func getDeleteSCSIDeviceTestCases(mocks mh.MockHelper, defaultArgs interface{},
 			name:   "error read state file",
 			fields: getDefaultSCSIFields(ctrl),
 			stateSetter: func(fields scsiFields) {
-				mocks.IOUTILReadFileErr(fields.fileReader)
+				mocks.OSReadFileErr(fields.os)
 			},
 			args:    defaultArgs,
 			wantErr: true,
@@ -342,8 +336,8 @@ func getDeleteSCSIDeviceTestCases(mocks mh.MockHelper, defaultArgs interface{},
 			name:   "device in blocked state",
 			fields: getDefaultSCSIFields(ctrl),
 			stateSetter: func(fields scsiFields) {
-				mocks.IOUTILReadFileOKReturn = "blocked"
-				mocks.IOUTILReadFileOK(fields.fileReader)
+				mocks.OSReadFileOKReturn = "blocked"
+				mocks.OSReadFileOK(fields.os)
 			},
 			args:    defaultArgs,
 			wantErr: true,
@@ -352,8 +346,8 @@ func getDeleteSCSIDeviceTestCases(mocks mh.MockHelper, defaultArgs interface{},
 			name:   "error open delete file",
 			fields: getDefaultSCSIFields(ctrl),
 			stateSetter: func(fields scsiFields) {
-				mocks.IOUTILReadFileOKReturn = "running"
-				mocks.IOUTILReadFileOK(fields.fileReader)
+				mocks.OSReadFileOKReturn = "running"
+				mocks.OSReadFileOK(fields.os)
 				mocks.OSOpenFileCallErr(fields.os)
 			},
 			args:    defaultArgs,
@@ -363,7 +357,7 @@ func getDeleteSCSIDeviceTestCases(mocks mh.MockHelper, defaultArgs interface{},
 			name:   "error write to delete file",
 			fields: getDefaultSCSIFields(ctrl),
 			stateSetter: func(fields scsiFields) {
-				mocks.IOUTILReadFileOK(fields.fileReader)
+				mocks.OSReadFileOK(fields.os)
 				_, fileMock := mocks.OSOpenFileCallOK(fields.os)
 				mocks.FileWriteStringErr(fileMock)
 				mocks.FileCloseErr(fileMock)
@@ -375,7 +369,7 @@ func getDeleteSCSIDeviceTestCases(mocks mh.MockHelper, defaultArgs interface{},
 			name:   "delete without error",
 			fields: getDefaultSCSIFields(ctrl),
 			stateSetter: func(fields scsiFields) {
-				mocks.IOUTILReadFileOK(fields.fileReader)
+				mocks.OSReadFileOK(fields.os)
 				_, fileMock := mocks.OSOpenFileCallOK(fields.os)
 				mocks.FileWriteStringOK(fileMock)
 				mocks.FileCloseOK(fileMock)
@@ -409,7 +403,7 @@ func Test_scsi_DeleteSCSIDeviceByHCTL(t *testing.T) {
 		Ctrl:                    ctrl,
 		OSOpenFileCallPath:      sysPath + "delete",
 		FileWriteStringCallData: "1",
-		IOUTILReadFileCallPath:  sysPath + "state",
+		OSReadFileCallPath:  sysPath + "state",
 	}
 
 	tests := getDeleteSCSIDeviceTestCases(mock, defaultArgs, ctrl)
@@ -417,7 +411,6 @@ func Test_scsi_DeleteSCSIDeviceByHCTL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -449,7 +442,7 @@ func Test_scsi_DeleteSCSIDeviceByName(t *testing.T) {
 		OSOpenFileCallPath: fmt.Sprintf(
 			"/sys/class/block/%s/device/delete", mh.ValidDeviceName),
 		FileWriteStringCallData: "1",
-		IOUTILReadFileCallPath: fmt.Sprintf(
+		OSReadFileCallPath: fmt.Sprintf(
 			"/sys/class/block/%s/device/state", mh.ValidDeviceName),
 	}
 
@@ -457,7 +450,6 @@ func Test_scsi_DeleteSCSIDeviceByName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -490,13 +482,12 @@ func Test_scsi_DeleteSCSIDeviceByPath(t *testing.T) {
 		Ctrl:                    ctrl,
 		OSOpenFileCallPath:      sysPath + "delete",
 		FileWriteStringCallData: "1",
-		IOUTILReadFileCallPath:  sysPath + "state",
+		OSReadFileCallPath:  sysPath + "state",
 	}
 	tests := getDeleteSCSIDeviceTestCases(mock, defaultArgs, ctrl)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -526,7 +517,7 @@ func Test_scsi_GetDeviceWWN(t *testing.T) {
 
 	mock := mh.MockHelper{
 		Ctrl: ctrl,
-		IOUTILReadFileCallPath: fmt.Sprintf(
+		OSReadFileCallPath: fmt.Sprintf(
 			"/sys/block/%s/device/wwid", mh.ValidDeviceName),
 		OSEXECCommandContextName: "chroot",
 		OSEXECCommandContextArgs: []string{testCHRoot, scsiIDPath, "-g", "-p", "0x83", "/dev/" + mh.ValidDeviceName},
@@ -544,7 +535,7 @@ func Test_scsi_GetDeviceWWN(t *testing.T) {
 			name:   "not found",
 			fields: getDefaultSCSIFields(ctrl),
 			stateSetter: func(fields scsiFields) {
-				mock.IOUTILReadFileErr(fields.fileReader)
+				mock.OSReadFileErr(fields.os)
 				mock.OSIsNotExistOK(fields.os)
 			},
 			args:    defaultArgs,
@@ -554,8 +545,8 @@ func Test_scsi_GetDeviceWWN(t *testing.T) {
 			name:   "found",
 			fields: getDefaultSCSIFields(ctrl),
 			stateSetter: func(fields scsiFields) {
-				mock.IOUTILReadFileOKReturn = mh.ValidSYSFCWWID
-				mock.IOUTILReadFileOK(fields.fileReader)
+				mock.OSReadFileOKReturn = mh.ValidSYSFCWWID
+				mock.OSReadFileOK(fields.os)
 			},
 			args:    defaultArgs,
 			wantErr: false,
@@ -565,7 +556,7 @@ func Test_scsi_GetDeviceWWN(t *testing.T) {
 			name:   "not found with scsi_id",
 			fields: getDefaultSCSIFields(ctrl),
 			stateSetter: func(fields scsiFields) {
-				mock.IOUTILReadFileErr(fields.fileReader)
+				mock.OSReadFileErr(fields.os)
 				mock.OSIsNotExistOKReturn = true
 				mock.OSIsNotExistOK(fields.os)
 				_, cmdMock := mock.OSExecCommandContextOK(fields.osexec)
@@ -579,7 +570,7 @@ func Test_scsi_GetDeviceWWN(t *testing.T) {
 			name:   "found with scsi_id",
 			fields: getDefaultSCSIFields(ctrl),
 			stateSetter: func(fields scsiFields) {
-				mock.IOUTILReadFileErr(fields.fileReader)
+				mock.OSReadFileErr(fields.os)
 				mock.OSIsNotExistOKReturn = true
 				mock.OSIsNotExistOK(fields.os)
 				_, cmdMock := mock.OSExecCommandContextOK(fields.osexec)
@@ -595,7 +586,6 @@ func Test_scsi_GetDeviceWWN(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
 				chroot:     tt.fields.chroot,
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -637,8 +627,8 @@ func Test_scsi_GetDevicesByWWN(t *testing.T) {
 		Ctrl:                    ctrl,
 		FilePathGlobCallPattern: "/sys/block/sd*",
 		FilePathGlobOKReturn:    []string{devicePath},
-		IOUTILReadFileCallPath:  deviceWWIDPath,
-		IOUTILReadFileOKReturn:  mh.ValidSYSFCWWID,
+		OSReadFileCallPath:  deviceWWIDPath,
+		OSReadFileOKReturn:  mh.ValidSYSFCWWID,
 	}
 
 	tests := []struct {
@@ -663,7 +653,7 @@ func Test_scsi_GetDevicesByWWN(t *testing.T) {
 			fields: getDefaultSCSIFields(ctrl),
 			stateSetter: func(fields scsiFields) {
 				mock.FilePathGlobOK(fields.filePath)
-				mock.IOUTILReadFileOK(fields.fileReader)
+				mock.OSReadFileOK(fields.os)
 			},
 			args:    defaultArgs,
 			want:    []string{mh.ValidDeviceName},
@@ -675,9 +665,9 @@ func Test_scsi_GetDevicesByWWN(t *testing.T) {
 			stateSetter: func(fields scsiFields) {
 				mock.FilePathGlobOKReturn = []string{devicePath, devicePath2}
 				mock.FilePathGlobOK(fields.filePath)
-				mock.IOUTILReadFileOK(fields.fileReader)
-				mock.IOUTILReadFileCallPath = deviceWWIDPath2
-				mock.IOUTILReadFileOK(fields.fileReader)
+				mock.OSReadFileOK(fields.os)
+				mock.OSReadFileCallPath = deviceWWIDPath2
+				mock.OSReadFileOK(fields.os)
 			},
 			args:    defaultArgs,
 			want:    []string{mh.ValidDeviceName, "sdf"},
@@ -698,7 +688,6 @@ func Test_scsi_GetDevicesByWWN(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -786,11 +775,11 @@ func Test_scsi_GetDMDeviceByChildren(t *testing.T) {
 				mock.FilePathGlobOKReturn = []string{dm2Path}
 				mock.FilePathGlobCallPattern = sysPath2Glob
 				mock.FilePathGlobOK(fields.filePath)
-				mock.IOUTILReadFileCallPath = dm1Path + "/dm/uuid"
-				mock.IOUTILReadFileErr(fields.fileReader)
-				mock.IOUTILReadFileOKReturn = "mpath"
-				mock.IOUTILReadFileCallPath = dm2Path + "/dm/uuid"
-				mock.IOUTILReadFileOK(fields.fileReader)
+				mock.OSReadFileCallPath = dm1Path + "/dm/uuid"
+				mock.OSReadFileErr(fields.os)
+				mock.OSReadFileOKReturn = "mpath"
+				mock.OSReadFileCallPath = dm2Path + "/dm/uuid"
+				mock.OSReadFileOK(fields.os)
 			},
 			args:    defaultArgs,
 			want:    "dm-2",
@@ -806,11 +795,11 @@ func Test_scsi_GetDMDeviceByChildren(t *testing.T) {
 				mock.FilePathGlobOKReturn = []string{dm2Path}
 				mock.FilePathGlobCallPattern = sysPath2Glob
 				mock.FilePathGlobOK(fields.filePath)
-				mock.IOUTILReadFileOKReturn = "mpath"
-				mock.IOUTILReadFileCallPath = dm1Path + "/dm/uuid"
-				mock.IOUTILReadFileOK(fields.fileReader)
-				mock.IOUTILReadFileCallPath = dm2Path + "/dm/uuid"
-				mock.IOUTILReadFileOK(fields.fileReader)
+				mock.OSReadFileOKReturn = "mpath"
+				mock.OSReadFileCallPath = dm1Path + "/dm/uuid"
+				mock.OSReadFileOK(fields.os)
+				mock.OSReadFileCallPath = dm2Path + "/dm/uuid"
+				mock.OSReadFileOK(fields.os)
 			},
 			args:    defaultArgs,
 			want:    "",
@@ -820,7 +809,6 @@ func Test_scsi_GetDMDeviceByChildren(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -917,7 +905,6 @@ func Test_scsi_CheckDeviceIs_Valid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -1007,7 +994,6 @@ func Test_scsi_GetDeviceNameByHCTL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -1092,7 +1078,6 @@ func Test_scsi_GetDMChildren(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,
@@ -1185,7 +1170,6 @@ func Test_scsi_WaitUdevSymlink(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scsi{
-				fileReader: tt.fields.fileReader,
 				filePath:   tt.fields.filePath,
 				os:         tt.fields.os,
 				osexec:     tt.fields.osexec,

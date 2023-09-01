@@ -17,7 +17,6 @@ package wrappers
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,12 +45,6 @@ type LimitedOSExec interface {
 type LimitedOSExecCmd interface {
 	CombinedOutput() ([]byte, error)
 }
-
-// LimitedIOUtil defines limited ioutil interface
-type LimitedIOUtil interface {
-	ReadFile(filename string) ([]byte, error)
-}
-
 // LimitedFilepath defines limited file path interface
 type LimitedFilepath interface {
 	Glob(pattern string) (matches []string, err error)
@@ -65,6 +58,7 @@ type LimitedOS interface {
 	IsNotExist(err error) bool
 	Mkdir(name string, perm os.FileMode) error
 	Remove(name string) error
+	ReadFile(filename string) ([]byte, error)
 }
 
 // ISCSILib defines iscsi function spec
@@ -97,15 +91,6 @@ type OSExecWrapper struct{}
 func (w *OSExecWrapper) CommandContext(ctx context.Context, name string, arg ...string) LimitedOSExecCmd {
 	return exec.CommandContext(ctx, name, arg...)
 }
-
-// IOUTILWrapper contains implementation of LimitedIOUtil interface
-type IOUTILWrapper struct{}
-
-// ReadFile is a wrapper of ioutil.ReadFile
-func (io *IOUTILWrapper) ReadFile(filename string) ([]byte, error) {
-	return ioutil.ReadFile(filepath.Clean(filename))
-}
-
 // FilepathWrapper contains implementation of LimitedFilePath interface
 type FilepathWrapper struct{}
 
@@ -121,6 +106,11 @@ func (io *FilepathWrapper) EvalSymlinks(path string) (string, error) {
 
 // OSWrapper contains implementation of LimitedOS interface
 type OSWrapper struct{}
+
+// ReadFile is a wrapper of os.ReadFile
+func (io *OSWrapper) ReadFile(filename string) ([]byte, error) {
+	return os.ReadFile(filepath.Clean(filename))
+}
 
 // OpenFile is a wrapper of os.OpenFile
 func (io *OSWrapper) OpenFile(name string, flag int, perm os.FileMode) (LimitedFile, error) {

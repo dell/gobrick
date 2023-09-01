@@ -61,8 +61,8 @@ type MockHelper struct {
 	OSEXECCommandContextArgs              []string
 	OSEXECCmdOKReturn                     string
 	OSIsNotExistOKReturn                  bool
-	IOUTILReadFileCallPath                string
-	IOUTILReadFileOKReturn                string
+	OSReadFileCallPath                string
+	OSReadFileOKReturn                string
 	FileWriteStringCallData               string
 	FilePathGlobCallPattern               string
 	FilePathGlobOKReturn                  []string
@@ -161,19 +161,19 @@ func (mh *MockHelper) FileCloseErr(m *wrp.MockLimitedFile) *gomock.Call {
 	return mh.FileCloseCall(m).Return(ErrTest)
 }
 
-// IOUTILReadFileCall mocks implementation of ReadFile method in LimitedIOUtil interface
-func (mh *MockHelper) IOUTILReadFileCall(m *wrp.MockLimitedIOUtil) *gomock.Call {
-	return m.EXPECT().ReadFile(mh.IOUTILReadFileCallPath)
+// OSReadFileCall mocks implementation of ReadFile method in LimitedOS interface
+func (mh *MockHelper) OSReadFileCall(m *wrp.MockLimitedOS) *gomock.Call {
+	return m.EXPECT().ReadFile(mh.OSReadFileCallPath)
 }
 
-// IOUTILReadFileErr mocks returning error from IOUTILReadFileCall
-func (mh *MockHelper) IOUTILReadFileErr(m *wrp.MockLimitedIOUtil) *gomock.Call {
-	return mh.IOUTILReadFileCall(m).Return(nil, ErrTest)
+// OSReadFileErr mocks returning error from OSReadFileCall
+func (mh *MockHelper) OSReadFileErr(m *wrp.MockLimitedOS) *gomock.Call {
+	return mh.OSReadFileCall(m).Return(nil, ErrTest)
 }
 
-// IOUTILReadFileOK mocks returning success from IOUTILReadFileCall
-func (mh *MockHelper) IOUTILReadFileOK(m *wrp.MockLimitedIOUtil) *gomock.Call {
-	return mh.IOUTILReadFileCall(m).Return([]byte(mh.IOUTILReadFileOKReturn), nil)
+// OSReadFileOK mocks returning success from OSReadFileCall
+func (mh *MockHelper) OSReadFileOK(m *wrp.MockLimitedOS) *gomock.Call {
+	return mh.OSReadFileCall(m).Return([]byte(mh.OSReadFileOKReturn), nil)
 }
 
 // FilePathGlobCall mocks implementation of Glob method in LimitedFilepath interface

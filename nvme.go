@@ -96,7 +96,7 @@ func NewNVMeConnector(params NVMeConnectorParams) *NVMeConnector {
 		powerpath: pp,
 		scsi:      s,
 		filePath:  &wrp.FilepathWrapper{},
-		ioutil:    &wrp.IOUTILWrapper{},
+		os:    &wrp.OSWrapper{},
 		baseConnector: newBaseConnector(mp, pp, s,
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
@@ -149,7 +149,7 @@ type NVMeConnector struct {
 
 	// wrappers
 	filePath wrp.LimitedFilepath
-	ioutil   wrp.LimitedIOUtil
+	os   wrp.LimitedOS
 }
 
 // NVMeTargetInfo - Placeholder for NVMe targets
@@ -657,14 +657,14 @@ func (c *NVMeConnector) getFCHostInfo(ctx context.Context) ([]FCHBAInfo, error) 
 	var FCHostsInfo []FCHBAInfo
 	for _, m := range match {
 		var FCHostInfo FCHBAInfo
-		data, err := c.ioutil.ReadFile(path.Join(m, "port_name"))
+		data, err := c.os.ReadFile(path.Join(m, "port_name"))
 		if err != nil {
 			log.Errorf("match: %s failed to read port_name file: %s", match, err.Error())
 			continue
 		}
 		FCHostInfo.PortName = strings.TrimSpace(string(data))
 
-		data, err = c.ioutil.ReadFile(path.Join(m, "node_name"))
+		data, err = c.os.ReadFile(path.Join(m, "node_name"))
 		if err != nil {
 			log.Errorf("match: %s failed to read node_name file: %s", match, err.Error())
 			continue

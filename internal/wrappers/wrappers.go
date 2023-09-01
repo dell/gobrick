@@ -108,7 +108,7 @@ func (io *FilepathWrapper) EvalSymlinks(path string) (string, error) {
 type OSWrapper struct{}
 
 // ReadFile is a wrapper of os.ReadFile
-func (os *OSWrapper) ReadFile(filename string) ([]byte, error) {
+func (io *OSWrapper) ReadFile(filename string) ([]byte, error) {
 	return os.ReadFile(filepath.Clean(filename))
 }
 

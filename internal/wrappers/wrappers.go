@@ -45,6 +45,7 @@ type LimitedOSExec interface {
 type LimitedOSExecCmd interface {
 	CombinedOutput() ([]byte, error)
 }
+
 // LimitedFilepath defines limited file path interface
 type LimitedFilepath interface {
 	Glob(pattern string) (matches []string, err error)
@@ -91,6 +92,7 @@ type OSExecWrapper struct{}
 func (w *OSExecWrapper) CommandContext(ctx context.Context, name string, arg ...string) LimitedOSExecCmd {
 	return exec.CommandContext(ctx, name, arg...)
 }
+
 // FilepathWrapper contains implementation of LimitedFilePath interface
 type FilepathWrapper struct{}
 

@@ -96,7 +96,7 @@ func NewNVMeConnector(params NVMeConnectorParams) *NVMeConnector {
 		powerpath: pp,
 		scsi:      s,
 		filePath:  &wrp.FilepathWrapper{},
-		os:    &wrp.OSWrapper{},
+		os:        &wrp.OSWrapper{},
 		baseConnector: newBaseConnector(mp, pp, s,
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
@@ -149,7 +149,7 @@ type NVMeConnector struct {
 
 	// wrappers
 	filePath wrp.LimitedFilepath
-	os   wrp.LimitedOS
+	os       wrp.LimitedOS
 }
 
 // NVMeTargetInfo - Placeholder for NVMe targets

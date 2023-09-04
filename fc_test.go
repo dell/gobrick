@@ -297,7 +297,7 @@ func TestFCConnector_ConnectVolume(t *testing.T) {
 			name:   "connection error",
 			fields: getDefaultFCFields(ctrl),
 			stateSetter: func(fields fcFields) {
-				getFCHBASInfoMock(&mock, fields.os,fields.filePath)
+				getFCHBASInfoMock(&mock, fields.os, fields.filePath)
 				waitForDeviceWWNMock(&mock, fields.filePath, fields.os, fields.scsi)
 				mock.SCSIGetDevicesByWWNCallWWN = mockhelper.ValidWWID
 				mock.SCSIGetDevicesByWWNOKReturn = mockhelper.ValidDevices

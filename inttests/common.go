@@ -20,8 +20,8 @@ package inttests
 
 import (
 	"encoding/json"
-	"os"
 	"log"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"

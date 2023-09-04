@@ -403,7 +403,7 @@ func Test_scsi_DeleteSCSIDeviceByHCTL(t *testing.T) {
 		Ctrl:                    ctrl,
 		OSOpenFileCallPath:      sysPath + "delete",
 		FileWriteStringCallData: "1",
-		OSReadFileCallPath:  sysPath + "state",
+		OSReadFileCallPath:      sysPath + "state",
 	}
 
 	tests := getDeleteSCSIDeviceTestCases(mock, defaultArgs, ctrl)
@@ -482,7 +482,7 @@ func Test_scsi_DeleteSCSIDeviceByPath(t *testing.T) {
 		Ctrl:                    ctrl,
 		OSOpenFileCallPath:      sysPath + "delete",
 		FileWriteStringCallData: "1",
-		OSReadFileCallPath:  sysPath + "state",
+		OSReadFileCallPath:      sysPath + "state",
 	}
 	tests := getDeleteSCSIDeviceTestCases(mock, defaultArgs, ctrl)
 	for _, tt := range tests {
@@ -627,8 +627,8 @@ func Test_scsi_GetDevicesByWWN(t *testing.T) {
 		Ctrl:                    ctrl,
 		FilePathGlobCallPattern: "/sys/block/sd*",
 		FilePathGlobOKReturn:    []string{devicePath},
-		OSReadFileCallPath:  deviceWWIDPath,
-		OSReadFileOKReturn:  mh.ValidSYSFCWWID,
+		OSReadFileCallPath:      deviceWWIDPath,
+		OSReadFileOKReturn:      mh.ValidSYSFCWWID,
 	}
 
 	tests := []struct {

@@ -54,10 +54,10 @@ const (
 // NewSCSI initializes scsi struct
 func NewSCSI(chroot string) *Scsi {
 	scsi := &Scsi{
-		chroot:     chroot,
-		filePath:   &wrp.FilepathWrapper{},
-		os:         &wrp.OSWrapper{},
-		osexec:     &wrp.OSExecWrapper{},
+		chroot:   chroot,
+		filePath: &wrp.FilepathWrapper{},
+		os:       &wrp.OSWrapper{},
+		osexec:   &wrp.OSExecWrapper{},
 	}
 	scsi.singleCall = &singleflight.Group{}
 
@@ -92,9 +92,9 @@ func (dperr *DevicesHaveDifferentParentsErr) Error() string {
 type Scsi struct {
 	chroot string
 
-	filePath   wrp.LimitedFilepath
-	os         wrp.LimitedOS
-	osexec     wrp.LimitedOSExec
+	filePath wrp.LimitedFilepath
+	os       wrp.LimitedOS
+	osexec   wrp.LimitedOSExec
 
 	singleCall *singleflight.Group
 }

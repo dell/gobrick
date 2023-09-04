@@ -61,8 +61,8 @@ type MockHelper struct {
 	OSEXECCommandContextArgs              []string
 	OSEXECCmdOKReturn                     string
 	OSIsNotExistOKReturn                  bool
-	OSReadFileCallPath                string
-	OSReadFileOKReturn                string
+	OSReadFileCallPath                    string
+	OSReadFileOKReturn                    string
 	FileWriteStringCallData               string
 	FilePathGlobCallPattern               string
 	FilePathGlobOKReturn                  []string

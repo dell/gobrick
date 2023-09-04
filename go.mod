@@ -3,8 +3,8 @@ module github.com/dell/gobrick
 go 1.21
 
 require (
-	github.com/dell/goiscsi v1.7.0
-	github.com/dell/gonvme v1.4.0
+	github.com/dell/goiscsi v1.8.0
+	github.com/dell/gonvme v1.5.0
 	github.com/golang/mock v1.3.1
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.7.0

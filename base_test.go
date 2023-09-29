@@ -53,6 +53,7 @@ type baseMockHelper struct {
 	SCSIGetDMDeviceByChildrenOKReturn    string
 	SCSIGetDMChildrenOKReturn            []string
 	SCSIGetDeviceNameByHCTLOKReturn      string
+	FilePathGlobOKReturn                 string
 
 	mh.MockHelper
 }

@@ -60,7 +60,8 @@ type t struct {
 }
 
 func getMultipathCommonTestCases(mocks mh.MockHelper, defaultArgs interface{},
-	ctrl *gomock.Controller) []t {
+	ctrl *gomock.Controller,
+) []t {
 	return []t{
 		{
 			name:   "ok",

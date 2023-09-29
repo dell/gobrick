@@ -21,13 +21,14 @@ package inttests
 import (
 	"context"
 	"fmt"
-	"github.com/dell/gobrick"
-	"github.com/dell/gobrick/pkg/multipath"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/dell/gobrick"
+	"github.com/dell/gobrick/pkg/multipath"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -90,13 +91,13 @@ func TestISCSI_ConnectDisconnect(t *testing.T) {
 				}
 				log.Printf("ID: %d RETRY!", i)
 			}
-			//assert.Nil(t, err)
-			//assert.NotEmpty(t, device.Name, device.WWN)
+			// assert.Nil(t, err)
+			// assert.NotEmpty(t, device.Name, device.WWN)
 			wg.Done()
 		}()
 	}
 	wg.Wait()
-	//assert.Nil(t, iscsiConnector.DisconnectVolume(ctx, volume))
+	// assert.Nil(t, iscsiConnector.DisconnectVolume(ctx, volume))
 }
 
 func TestISCSI_ConnectDisconnectByName(t *testing.T) {

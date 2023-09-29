@@ -39,17 +39,20 @@ var (
 		Host:    validSCSIHost1,
 		Channel: "0",
 		Target:  "0",
-		Lun:     strconv.FormatInt(int64(validLunNumber), 10)}
+		Lun:     strconv.FormatInt(int64(validLunNumber), 10),
+	}
 	validHCTL1Target1 = scsi.HCTL{
 		Host:    validSCSIHost1,
 		Channel: "0",
 		Target:  "1",
-		Lun:     strconv.FormatInt(int64(validLunNumber), 10)}
+		Lun:     strconv.FormatInt(int64(validLunNumber), 10),
+	}
 	validHCTL2 = scsi.HCTL{
 		Host:    validSCSIHost2,
 		Channel: "0",
 		Target:  "0",
-		Lun:     strconv.FormatInt(int64(validLunNumber), 10)}
+		Lun:     strconv.FormatInt(int64(validLunNumber), 10),
+	}
 	validDevice = Device{
 		WWN:  mockhelper.ValidWWID,
 		Name: mockhelper.ValidDeviceName,
@@ -57,7 +60,8 @@ var (
 	validDeviceMultipath = Device{
 		Name:        mockhelper.ValidDMName,
 		WWN:         mockhelper.ValidWWID,
-		MultipathID: mockhelper.ValidWWID}
+		MultipathID: mockhelper.ValidWWID,
+	}
 )
 
 const (
@@ -80,9 +84,11 @@ func addToLogData(ctx context.Context, format string, args ...interface{}) {
 func (tl *testLogger) Info(ctx context.Context, format string, args ...interface{}) {
 	addToLogData(ctx, format, args...)
 }
+
 func (tl *testLogger) Debug(ctx context.Context, format string, args ...interface{}) {
 	addToLogData(ctx, format, args...)
 }
+
 func (tl *testLogger) Error(ctx context.Context, format string, args ...interface{}) {
 	addToLogData(ctx, format, args...)
 }

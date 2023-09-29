@@ -71,7 +71,6 @@ func TestNewSCSI(t *testing.T) {
 }
 
 func Test_scsi_IsDeviceExist(t *testing.T) {
-
 	type args struct {
 		ctx    context.Context
 		device string
@@ -321,7 +320,8 @@ type t struct {
 }
 
 func getDeleteSCSIDeviceTestCases(mocks mh.MockHelper, defaultArgs interface{},
-	ctrl *gomock.Controller) []t {
+	ctrl *gomock.Controller,
+) []t {
 	return []t{
 		{
 			name:   "error read state file",
@@ -845,7 +845,8 @@ func Test_scsi_CheckDeviceIs_Valid(t *testing.T) {
 		OSStatCallPath:           mh.ValidDevicePath,
 		OSEXECCommandContextName: "dd",
 		OSEXECCommandContextArgs: []string{
-			"if=" + mh.ValidDevicePath, "of=/dev/null", "bs=1k", "count=1"},
+			"if=" + mh.ValidDevicePath, "of=/dev/null", "bs=1k", "count=1",
+		},
 		OSEXECCmdOKReturn: "invalid",
 	}
 
@@ -1032,7 +1033,8 @@ func Test_scsi_GetDMChildren(t *testing.T) {
 		FilePathGlobCallPattern: sysPath + "*",
 		FilePathGlobOKReturn: []string{
 			sysPath + mh.ValidDeviceName,
-			sysPath + mh.ValidDeviceName2},
+			sysPath + mh.ValidDeviceName2,
+		},
 	}
 
 	tests := []struct {

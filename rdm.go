@@ -125,7 +125,8 @@ func (fc *FCConnector) rescanAllHosts(ctx context.Context) error {
 			Host:    strconv.Itoa(host),
 			Lun:     "-",
 			Channel: "-",
-			Target:  "-"}
+			Target:  "-",
+		}
 		err := scsiHost.RescanSCSIHostByHCTL(ctx, hctl)
 		if err != nil {
 			log.Error(ctx, err.Error())

@@ -22,10 +22,11 @@
 package gobrick
 
 import (
-	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_rateLock(t *testing.T) {

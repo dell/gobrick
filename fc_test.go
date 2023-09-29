@@ -79,7 +79,8 @@ func getDefaultFCFields(ctrl *gomock.Controller) fcFields {
 }
 
 func getFCHBASInfoMock(mock *baseMockHelper,
-	os *wrp.MockLimitedOS, filepath *wrp.MockLimitedFilepath) {
+	os *wrp.MockLimitedOS, filepath *wrp.MockLimitedFilepath,
+) {
 	isFCSupportedMock(mock, os)
 	sysPath := "/sys/class/fc_host/host"
 	sysPathGlob := sysPath + "*"
@@ -113,7 +114,9 @@ func isFCSupportedMock(mock *baseMockHelper, os *wrp.MockLimitedOS) {
 
 func waitForDeviceWWNMock(mock *baseMockHelper,
 	filepath *wrp.MockLimitedFilepath,
-	scsi *intscsi.MockSCSI) {
+	os *wrp.MockLimitedOS,
+	scsi *intscsi.MockSCSI,
+) {
 	findHCTLsForFCHBAMock(mock, filepath, os)
 
 	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1
@@ -148,8 +151,8 @@ func waitForDeviceWWNMock(mock *baseMockHelper,
 }
 
 func findHCTLsForFCHBAMock(mock *baseMockHelper,
-	filepath *wrp.MockLimitedFilepath, os *wrp.MockLimitedOS) {
-
+	filepath *wrp.MockLimitedFilepath, os *wrp.MockLimitedOS,
+) {
 	sysPath := "/sys/class/fc_transport/target"
 	sysPathGlob1 := sysPath + validSCSIHost1 + ":*"
 	sysPathGlob2 := sysPath + validSCSIHost2 + ":*"
@@ -184,8 +187,8 @@ func cleanConnectionMock(mock *baseMockHelper,
 	filepath *wrp.MockLimitedFilepath,
 	os *wrp.MockLimitedOS,
 	scsi *intscsi.MockSCSI,
-	multipath *intmultipath.MockMultipath) {
-
+	multipath *intmultipath.MockMultipath,
+) {
 	getFCHBASInfoMock(mock, os, filepath)
 	findHCTLsForFCHBAMock(mock, filepath, os)
 
@@ -315,7 +318,6 @@ func TestFCConnector_ConnectVolume(t *testing.T) {
 				mock.SCSICheckDeviceIsValidOK(fields.scsi)
 
 				cleanConnectionMock(&mock, fields.filePath, fields.os, fields.scsi, fields.multipath)
-
 			},
 			args:    defaultArgs,
 			want:    Device{},

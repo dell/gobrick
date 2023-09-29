@@ -101,7 +101,8 @@ func NewNVMeConnector(params NVMeConnectorParams) *NVMeConnector {
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
 				MultipathFlushRetryTimeout: params.MultipathFlushRetryTimeout,
-				MultipathFlushRetries:      params.MultipathFlushRetries}),
+				MultipathFlushRetries:      params.MultipathFlushRetries,
+			}),
 	}
 
 	nvmeOpts := make(map[string]string)
@@ -366,7 +367,8 @@ func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolume
 }
 
 func (c *NVMeConnector) connectMultipathDevice(
-	ctx context.Context, sessions []gonvme.NVMESession, info NVMeVolumeInfo, useFC bool) (Device, error) {
+	ctx context.Context, _ []gonvme.NVMESession, info NVMeVolumeInfo, useFC bool,
+) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.connectMultipathDevice")()
 	devCH := make(chan DevicePathResult)
 	wg := sync.WaitGroup{}
@@ -433,7 +435,7 @@ func (c *NVMeConnector) connectMultipathDevice(
 			}
 		}
 		if mpath != "" {
-			//use nguid as wwn for nvme devices
+			// use nguid as wwn for nvme devices
 			var err error
 			if err = c.scsi.WaitUdevSymlinkNVMe(ctx, mpath, nguid); err == nil {
 				logger.Info(ctx, "multipath device found: %s", mpath)
@@ -529,7 +531,6 @@ func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, 
 }
 
 func (c *NVMeConnector) wwnMatches(nguid, wwn string) bool {
-
 	/*
 		Sample wwn : naa.68ccf098001111a2222b3d4444a1b23c
 		wwn1 : 1111a2222b3d4444
@@ -568,32 +569,31 @@ func (c *NVMeConnector) tryNVMeConnect(ctx context.Context, info NVMeVolumeInfo,
 				if err != nil {
 					log.Errorf("Couldn't connect to NVMeFC target")
 					continue
-				} else {
-					return nil
 				}
+				return nil
 			}
 		}
 	}
 	return nil
 }
 
-func readNVMeDevicesFromResultCH(ch chan DevicePathResult, result []string) ([]string, string) {
-
+func readNVMeDevicesFromResultCH(ch chan DevicePathResult, _ []string) ([]string, string) {
 	devicePathResult := <-ch
 	var devicePaths []string
-	for _, path := range devicePathResult.devicePaths {
-		// modify path /dev/nvme0n1 -> nvme0n1
-		newpath := strings.ReplaceAll(path, "/dev/", "")
+	for _, dpath := range devicePathResult.devicePaths {
+		// modify dpath /dev/nvme0n1 -> nvme0n1
+		newpath := strings.ReplaceAll(dpath, "/dev/", "")
 		devicePaths = append(devicePaths, newpath)
 	}
 	return devicePaths, devicePathResult.nguid
 }
 
 func (c *NVMeConnector) checkNVMeSessions(
-	ctx context.Context, info NVMeVolumeInfo) ([]gonvme.NVMESession, error) {
+	ctx context.Context, info NVMeVolumeInfo,
+) ([]gonvme.NVMESession, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.checkNVMeSessions")()
 	var activeSessions []gonvme.NVMESession
-	//var targetsToLogin []NVMeTargetInfo
+	// var targetsToLogin []NVMeTargetInfo
 	for _, t := range info.Targets {
 		logger.Info(ctx,
 			"check NVMe session for %s %s", t.Portal, t.Target)
@@ -603,9 +603,8 @@ func (c *NVMeConnector) checkNVMeSessions(
 			logger.Error(ctx,
 				"unable to get nvme session info: %s", err.Error())
 			continue
-		} else {
-			activeSessions = append(activeSessions, session)
 		}
+		activeSessions = append(activeSessions, session)
 	}
 
 	errMsg := "can't find active nvme session"
@@ -619,7 +618,8 @@ func (c *NVMeConnector) checkNVMeSessions(
 }
 
 func (c *NVMeConnector) getSessionByTargetInfo(ctx context.Context,
-	target NVMeTargetInfo) (gonvme.NVMESession, bool, error) {
+	target NVMeTargetInfo,
+) (gonvme.NVMESession, bool, error) {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.getSessionByTargetInfo")()
 	r := gonvme.NVMESession{}
 	logPrefix := fmt.Sprintf("Portal: %s, Target: %s :", target.Portal, target.Target)
@@ -629,7 +629,7 @@ func (c *NVMeConnector) getSessionByTargetInfo(ctx context.Context,
 		return r, false, err
 	}
 	var found bool
-	//TODO: check if comparision needs contains check
+	// TODO: check if comparision needs contains check
 	for _, s := range sessions {
 		if s.Target == target.Target && s.Portal == target.Portal {
 			r = s

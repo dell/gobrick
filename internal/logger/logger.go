@@ -45,17 +45,17 @@ type Logger interface {
 type DummyLogger struct{}
 
 // Info is a dummy implementation of logger Info method
-func (dl *DummyLogger) Info(ctx context.Context, format string, args ...interface{}) {
+func (dl *DummyLogger) Info(_ context.Context, format string, args ...interface{}) {
 	log.Print("INFO: " + fmt.Sprintf(format, args...))
 }
 
 // Debug is a dummy implementation of logger Debug method
-func (dl *DummyLogger) Debug(ctx context.Context, format string, args ...interface{}) {
+func (dl *DummyLogger) Debug(_ context.Context, format string, args ...interface{}) {
 	log.Print("DEBUG: " + fmt.Sprintf(format, args...))
 }
 
 // Error is a dummy implementation of logger Error method
-func (dl *DummyLogger) Error(ctx context.Context, format string, args ...interface{}) {
+func (dl *DummyLogger) Error(_ context.Context, format string, args ...interface{}) {
 	log.Print("ERROR: " + fmt.Sprintf(format, args...))
 }
 

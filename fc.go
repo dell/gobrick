@@ -79,7 +79,8 @@ func NewFCConnector(params FCConnectorParams) *FCConnector {
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
 				MultipathFlushRetryTimeout: params.MultipathFlushRetryTimeout,
-				MultipathFlushRetries:      params.MultipathFlushRetries}),
+				MultipathFlushRetries:      params.MultipathFlushRetries,
+			}),
 	}
 
 	setTimeouts(&conn.waitDeviceRegisterTimeout, params.WaitDeviceRegisterTimeout,
@@ -119,7 +120,7 @@ type FCConnector struct {
 	powerpath     intpowerpath.Powerpath
 	scsi          intscsi.SCSI
 
-	//wrappers
+	// wrappers
 	filePath wrp.LimitedFilepath
 	os       wrp.LimitedOS
 
@@ -239,7 +240,8 @@ func (fc *FCConnector) validateFCVolumeInfo(ctx context.Context, info FCVolumeIn
 }
 
 func (fc *FCConnector) connectDevice(
-	ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (Device, error) {
+	ctx context.Context, hbas []FCHBA, info FCVolumeInfo,
+) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "FCConnector.connectDevice")()
 	wwn, err := fc.waitForDeviceWWN(ctx, hbas, info)
 	if err != nil {
@@ -307,7 +309,8 @@ func (fc *FCConnector) waitSingleDevice(ctx context.Context, wwn string, devices
 }
 
 func (fc *FCConnector) waitMultipathDevice(
-	ctx context.Context, wwn string, devices []string) (string, error) {
+	ctx context.Context, wwn string, devices []string,
+) (string, error) {
 	defer tracer.TraceFuncCall(ctx, "FCConnector.waitMultipathDevice")()
 	err := fc.multipath.AddWWID(ctx, wwn)
 	if err != nil {
@@ -345,8 +348,10 @@ func (fc *FCConnector) waitMultipathDevice(
 	logger.Info(ctx, "multipath device for WWN %s found: %s", wwn, mpath)
 	return mpath, nil
 }
+
 func (fc *FCConnector) waitPowerpathDevice(
-	ctx context.Context, wwn string, devices []string) (string, error) {
+	ctx context.Context, wwn string, devices []string,
+) (string, error) {
 	defer tracer.TraceFuncCall(ctx, "FCConnector.waitPowerpathDevice")()
 	var ppath string
 	for i := 0; i < int(fc.waitDeviceRegisterTimeout.Seconds()); i++ {
@@ -374,7 +379,8 @@ func (fc *FCConnector) waitPowerpathDevice(
 }
 
 func (fc *FCConnector) waitForDeviceWWN(
-	ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+	ctx context.Context, hbas []FCHBA, info FCVolumeInfo,
+) (string, error) {
 	defer tracer.TraceFuncCall(ctx, "FCConnector.waitForDeviceWWN")()
 	var numRescans, secondsNextScan int
 
@@ -456,7 +462,8 @@ func (fc *FCConnector) waitForDeviceWWN(
 }
 
 func (fc *FCConnector) findHCTLsForFCHBA(
-	ctx context.Context, hba FCHBA, info FCVolumeInfo) ([]scsi.HCTL, []scsi.HCTL, error) {
+	ctx context.Context, hba FCHBA, info FCVolumeInfo,
+) ([]scsi.HCTL, []scsi.HCTL, error) {
 	defer tracer.TraceFuncCall(ctx, "FCConnector.findHCTLsForFCHBA")()
 	hostDev := hba.HostDevice
 	if len(hostDev) > 4 {
@@ -496,9 +503,11 @@ func (fc *FCConnector) findHCTLsForFCHBA(
 			targetPathPart := strings.Split(pathMatch, "/")[4]
 			ct := strings.Split(targetPathPart, ":")
 			if len(ct) >= 3 {
-				hctl := scsi.HCTL{Host: hostDev,
+				hctl := scsi.HCTL{
+					Host:    hostDev,
 					Lun:     lun,
-					Channel: ct[1], Target: ct[2]}
+					Channel: ct[1], Target: ct[2],
+				}
 				logger.Info(ctx, "HBA: %s FC device HCTL: %s", hba, hctl)
 				hctlsToDiscover = append(hctlsToDiscover, hctl)
 			}
@@ -510,8 +519,10 @@ func (fc *FCConnector) findHCTLsForFCHBA(
 	var hctlsToRescan []scsi.HCTL
 	if needFullRescan {
 		// at least one target port not found, do full scsi rescan
-		hctlsToRescan = []scsi.HCTL{{Host: hostDev, Lun: "-",
-			Channel: "-", Target: "-"}}
+		hctlsToRescan = []scsi.HCTL{{
+			Host: hostDev, Lun: "-",
+			Channel: "-", Target: "-",
+		}}
 	} else {
 		hctlsToRescan = make([]scsi.HCTL, len(hctlsToDiscover))
 		copy(hctlsToRescan, hctlsToDiscover)

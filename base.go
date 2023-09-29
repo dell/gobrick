@@ -87,7 +87,6 @@ func (bc *baseConnector) disconnectDevicesByDeviceName(ctx context.Context, name
 	var wwn string
 	if strings.HasPrefix(name, deviceMapperPrefix) {
 		wwn, err = bc.getDMWWN(ctx, name)
-
 	} else {
 		wwn, err = bc.scsi.GetDeviceWWN(ctx, []string{name})
 	}
@@ -114,7 +113,6 @@ func (bc *baseConnector) disconnectNVMEDevicesByDeviceName(ctx context.Context, 
 	var wwn string
 	if strings.HasPrefix(name, deviceMapperPrefix) {
 		wwn, err = bc.getNVMEDMWWN(ctx, name)
-
 	} else {
 		wwn, err = bc.scsi.GetNVMEDeviceWWN(ctx, []string{name})
 	}
@@ -132,7 +130,8 @@ func (bc *baseConnector) disconnectNVMEDevicesByDeviceName(ctx context.Context, 
 }
 
 func (bc *baseConnector) cleanNVMeDevices(ctx context.Context,
-	force bool, devices []string) error {
+	force bool, devices []string,
+) error {
 	defer tracer.TraceFuncCall(ctx, "baseConnector.cleanNVMeDevices")()
 	var newDevices []string
 	for _, device := range devices {
@@ -168,7 +167,8 @@ func (bc *baseConnector) cleanNVMeDevices(ctx context.Context,
 }
 
 func (bc *baseConnector) cleanDevices(ctx context.Context,
-	force bool, devices []string) error {
+	force bool, devices []string,
+) error {
 	defer tracer.TraceFuncCall(ctx, "baseConnector.cleanDevices")()
 	dm, err := bc.scsi.GetDMDeviceByChildren(ctx, devices)
 	if err != nil {

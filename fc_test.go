@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
+        "os" 
 	intpowerpath "github.com/dell/gobrick/internal/powerpath"
 
 	"github.com/dell/gobrick/internal/mockhelper"
@@ -114,7 +114,8 @@ func isFCSupportedMock(mock *baseMockHelper, os *wrp.MockLimitedOS) {
 
 func waitForDeviceWWNMock(mock *baseMockHelper,
 	filepath *wrp.MockLimitedFilepath,
-	scsi *intscsi.MockSCSI,
+	os *wrp.MockLimitedOS,
+	scsi *intscsi.MockSCSI
 ) {
 	findHCTLsForFCHBAMock(mock, filepath, os)
 

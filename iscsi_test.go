@@ -90,7 +90,7 @@ type iscsiFields struct {
 	multipath     *intmultipath.MockMultipath
 	scsi          *intscsi.MockSCSI
 	iscsiLib      *wrp.MockISCSILib
-	filePath      *wrp.MockLimitedFilepath
+	filePath      wrp.MockLimitedFilepath
 
 	manualSessionManagement                bool
 	waitDeviceTimeout                      time.Duration

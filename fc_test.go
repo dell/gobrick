@@ -115,7 +115,7 @@ func isFCSupportedMock(mock *baseMockHelper, os *wrp.MockLimitedOS) {
 func waitForDeviceWWNMock(mock *baseMockHelper,
 	filepath *wrp.MockLimitedFilepath,
 	os *wrp.MockLimitedOS,
-	scsi *intscsi.MockSCSI
+	scsi *intscsi.MockSCSI,
 ) {
 	findHCTLsForFCHBAMock(mock, filepath, os)
 

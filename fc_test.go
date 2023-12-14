@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 	"time"
-        "os" 
+         
 	intpowerpath "github.com/dell/gobrick/internal/powerpath"
 
 	"github.com/dell/gobrick/internal/mockhelper"
@@ -108,7 +108,7 @@ func getFCHBASInfoMock(mock *baseMockHelper,
 func isFCSupportedMock(mock *baseMockHelper, os *wrp.MockLimitedOS) {
 	mock.OSStatCallPath = "/sys/class/fc_host"
 	_, statMock := mock.OSStatCallOK(os)
-	mock.OSStatFileInfoIsDirOKReturn = true
+	mock.OSStatFileInfoIsDirOKReturn = "true"
 	mock.OSStatFileInfoIsDirOK(statMock)
 }
 

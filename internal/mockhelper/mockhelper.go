@@ -22,7 +22,7 @@ import (
 	"os"
 
 	wrp "github.com/dell/gobrick/internal/wrappers"
-	"github.com/dell/goiscsi"
+	
 	"github.com/golang/mock/gomock"
 )
 
@@ -70,10 +70,10 @@ type MockHelper struct {
 	FilePathEvalSymlinksOKReturn          string
 	ISCSILibGetInitiatorsCallFilename     string
 	ISCSILibGetInitiatorsOKReturn         []string
-	ISCSILibGetSessionsOKReturn           []goiscsi.ISCSISession
-	ISCSILibPerformLoginCallTarget        goiscsi.ISCSITarget
-	ISCSILibCreateOrUpdateNodeCallTarget  goiscsi.ISCSITarget
-	ISCSILibCreateOrUpdateNodeCallOptions map[string]string
+	ISCSILibGetSessionsOKReturn           []string 
+	ISCSILibPerformLoginCallTarget        string
+	ISCSILibCreateOrUpdateNodeCallTarget  string
+	ISCSILibCreateOrUpdateNodeCallOptions string
 }
 
 // OSStatCall contains mock implementation of Stat method in LimitedOS interface

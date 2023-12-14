@@ -380,7 +380,7 @@ func TestISCSIConnector_ConnectVolume(t *testing.T) {
 				mock.SCSICheckDeviceIsValidOKReturn = false
 				mock.SCSICheckDeviceIsValidOK(fields.scsi)
 				// no sessions
-				mock.ISCSILibGetSessionsOKReturn = nil
+				mock.ISCSILibGetSessionsOKReturn = ""
 				mock.ISCSILibGetSessionsOK(fields.iscsiLib).MinTimes(2)
 			},
 			args:    defaultArgs,

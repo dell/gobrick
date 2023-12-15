@@ -20,11 +20,12 @@ package inttests
 
 import (
 	"context"
-	"github.com/dell/gobrick"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"testing"
 	"time"
+
+	"github.com/dell/gobrick"
+	"github.com/stretchr/testify/assert"
 )
 
 const (

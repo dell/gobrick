@@ -205,7 +205,7 @@ func (s *Scsi) rescanSCSIHostByHCTL(ctx context.Context, addr HCTL) error {
 	filePath := fmt.Sprintf("%s/host%s/scan", hostsDir, addr.Host)
 	scanString := fmt.Sprintf("%s %s %s", addr.Channel, addr.Target, addr.Lun)
 	logger.Info(ctx, "rescan scsi: %s %s", addr.Host, scanString)
-	scanFile, err := s.os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0200)
+	scanFile, err := s.os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0o200)
 	if err != nil {
 		logger.Error(ctx, "Failed to open %s", filePath)
 		return err
@@ -323,7 +323,7 @@ func (s *Scsi) deleteSCSIDeviceByPath(ctx context.Context, devPath string) error
 		logger.Error(ctx, msg)
 		return errors.New(msg)
 	}
-	deleteFile, err := s.os.OpenFile(deletePath, os.O_APPEND|os.O_WRONLY, 0200)
+	deleteFile, err := s.os.OpenFile(deletePath, os.O_APPEND|os.O_WRONLY, 0o200)
 	if err != nil {
 		logger.Error(ctx, "could not open %s path", deletePath)
 		// ignore
@@ -376,8 +376,7 @@ func (s *Scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (str
 
 // GetNVMEMultipathDMName finds the multipath DM mame for NVMe
 func (s *Scsi) GetNVMEMultipathDMName(device string, pattern string) ([]string, error) {
-
-	var retryCount = 0
+	retryCount := 0
 	for {
 		matches, err := s.filePath.Glob(fmt.Sprintf(pattern, device))
 		if len(matches) > 0 || retryCount == maxRetryCount {
@@ -474,7 +473,7 @@ func (s *Scsi) getDevicesByWWN(ctx context.Context, wwn string) ([]string, error
 	return nil, nil
 }
 
-func (s *Scsi) checkExist(ctx context.Context, device string) bool {
+func (s *Scsi) checkExist(_ context.Context, device string) bool {
 	_, err := s.os.Stat(device)
 	return err == nil
 }
@@ -536,7 +535,7 @@ func (s *Scsi) rescanSCSIDeviceByHCTL(ctx context.Context, h HCTL) error {
 	}
 	devicePath := fmt.Sprintf("/sys/class/scsi_device/%s:%s:%s:%s/device/rescan",
 		h.Host, h.Channel, h.Target, h.Lun)
-	scanFile, err := s.os.OpenFile(devicePath, os.O_APPEND|os.O_WRONLY, 0200)
+	scanFile, err := s.os.OpenFile(devicePath, os.O_APPEND|os.O_WRONLY, 0o200)
 	if err != nil {
 		logger.Error(ctx, "failed to open %s: %s", devicePath, err.Error())
 		return err
@@ -573,8 +572,7 @@ func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 
 // GetNVMESymlink return the NVMe symlink for the given path
 func (s *Scsi) GetNVMESymlink(checkPath string) (string, error) {
-
-	var retryCount = 1
+	retryCount := 1
 	for {
 		symlink, err := s.filePath.EvalSymlinks(checkPath)
 		if err == nil || retryCount == maxRetryCount {

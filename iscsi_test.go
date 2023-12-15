@@ -340,7 +340,6 @@ func TestISCSIConnector_ConnectVolume(t *testing.T) {
 				mock.SCSICheckDeviceIsValidCallDevice = mockhelper.ValidDMPath
 				mock.SCSICheckDeviceIsValidOKReturn = true
 				mock.SCSICheckDeviceIsValidOK(fields.scsi)
-
 			},
 			args:    defaultArgs,
 			want:    validDeviceMultipath,
@@ -359,12 +358,12 @@ func TestISCSIConnector_ConnectVolume(t *testing.T) {
 				mock.SCSICheckDeviceIsValidCallDevice = mockhelper.ValidDevicePath2
 				mock.SCSICheckDeviceIsValidOKReturn = true
 				mock.SCSICheckDeviceIsValidOK(fields.scsi)
-
 			},
 			args: defaultArgs,
 			want: Device{
 				WWN:  mockhelper.ValidWWID,
-				Name: mockhelper.ValidDeviceName2},
+				Name: mockhelper.ValidDeviceName2,
+			},
 			wantErr: false,
 		},
 		{
@@ -558,7 +557,6 @@ func TestISCSIConnector_DisconnectVolume(t *testing.T) {
 				mock.SCSIGetDeviceNameByHCTLOK(fields.scsi)
 
 				BaseConnectorCleanDeviceMock(&mock, fields.scsi, fields.multipath)
-
 			},
 			args:    defaultArgs,
 			wantErr: false,

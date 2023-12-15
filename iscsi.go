@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"math"
 	"os/exec"
 	"path"
@@ -30,6 +29,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/dell/gobrick/internal/logger"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
@@ -89,7 +90,8 @@ func NewISCSIConnector(params ISCSIConnectorParams) *ISCSIConnector {
 			baseConnectorParams{
 				MultipathFlushTimeout:      params.MultipathFlushTimeout,
 				MultipathFlushRetryTimeout: params.MultipathFlushRetryTimeout,
-				MultipathFlushRetries:      params.MultipathFlushRetries}),
+				MultipathFlushRetries:      params.MultipathFlushRetries,
+			}),
 		chapPassword: params.ChapPassword,
 		chapUser:     params.ChapUser,
 		chapEnabled:  params.ChapEnabled,
@@ -306,7 +308,8 @@ func (c *ISCSIConnector) cleanConnection(ctx context.Context, force bool, info I
 }
 
 func (c *ISCSIConnector) connectSingleDevice(
-	ctx context.Context, sessions []goiscsi.ISCSISession, info ISCSIVolumeInfo) (Device, error) {
+	ctx context.Context, sessions []goiscsi.ISCSISession, info ISCSIVolumeInfo,
+) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.connectSingleDevice")()
 	devCH := make(chan string, len(sessions))
 	wg := sync.WaitGroup{}
@@ -393,7 +396,8 @@ func readDevicesFromResultCH(ch chan string, result []string) []string {
 }
 
 func (c *ISCSIConnector) connectPowerpathDevice(
-	ctx context.Context, sessions []goiscsi.ISCSISession, info ISCSIVolumeInfo) (Device, error) {
+	ctx context.Context, sessions []goiscsi.ISCSISession, info ISCSIVolumeInfo,
+) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.connectPowerpathDevice")()
 	devCH := make(chan string, len(sessions))
 	wg := sync.WaitGroup{}
@@ -475,7 +479,8 @@ func (c *ISCSIConnector) connectPowerpathDevice(
 }
 
 func (c *ISCSIConnector) connectMultipathDevice(
-	ctx context.Context, sessions []goiscsi.ISCSISession, info ISCSIVolumeInfo) (Device, error) {
+	ctx context.Context, sessions []goiscsi.ISCSISession, info ISCSIVolumeInfo,
+) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.connectMultipathDevice")()
 	devCH := make(chan string, len(sessions))
 	wg := sync.WaitGroup{}
@@ -566,6 +571,7 @@ func (c *ISCSIConnector) connectMultipathDevice(
 		time.Sleep(time.Second)
 	}
 }
+
 func (c *ISCSIConnector) validateISCSIVolumeInfo(ctx context.Context, info ISCSIVolumeInfo) error {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.validateISCSIVolumeInfo")()
 	if len(info.Targets) == 0 {
@@ -582,7 +588,8 @@ func (c *ISCSIConnector) validateISCSIVolumeInfo(ctx context.Context, info ISCSI
 
 func (c *ISCSIConnector) discoverDevice(
 	ctx context.Context, rescans int, wg *sync.WaitGroup, result chan string,
-	session goiscsi.ISCSISession, info ISCSIVolumeInfo) {
+	session goiscsi.ISCSISession, info ISCSIVolumeInfo,
+) {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.discoverDevice")()
 	defer wg.Done()
 	lun := strconv.FormatInt(int64(info.Lun), 10)
@@ -652,7 +659,8 @@ func (c *ISCSIConnector) discoverDevice(
 }
 
 func (c *ISCSIConnector) checkISCSISessions(
-	ctx context.Context, info ISCSIVolumeInfo) ([]goiscsi.ISCSISession, error) {
+	ctx context.Context, info ISCSIVolumeInfo,
+) ([]goiscsi.ISCSISession, error) {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.checkISCSISessions")()
 	var activeSessions []goiscsi.ISCSISession
 	var targetsToLogin []ISCSITargetInfo
@@ -711,7 +719,8 @@ func (c *ISCSIConnector) checkISCSISessions(
 }
 
 func (c *ISCSIConnector) tryISCSILogin(
-	ctx context.Context, targets []ISCSITargetInfo, force bool) ([]goiscsi.ISCSISession, error) {
+	ctx context.Context, targets []ISCSITargetInfo, force bool,
+) ([]goiscsi.ISCSISession, error) {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.tryISCSILogin")()
 	var sessions []goiscsi.ISCSISession
 	for _, t := range targets {
@@ -781,14 +790,16 @@ func (c *ISCSIConnector) tryEnableManualISCSISessionMGMT(ctx context.Context, ta
 }
 
 func (c *ISCSIConnector) isISCSISessionActive(
-	ctx context.Context, session goiscsi.ISCSISession) bool {
+	ctx context.Context, session goiscsi.ISCSISession,
+) bool {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.isISCSISessionActive")()
 	return session.ISCSISessionState == goiscsi.ISCSISessionStateLOGGEDIN &&
 		session.ISCSIConnectionState == goiscsi.ISCSIConnectionStateLOGGEDIN
 }
 
 func (c *ISCSIConnector) getSessionByTargetInfo(ctx context.Context,
-	target ISCSITargetInfo) (goiscsi.ISCSISession, bool, error) {
+	target ISCSITargetInfo,
+) (goiscsi.ISCSISession, bool, error) {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.getSessionByTargetInfo")()
 	r := goiscsi.ISCSISession{}
 	logPrefix := fmt.Sprintf("Portal: %s, Target: %s :", target.Portal, target.Target)
@@ -814,7 +825,8 @@ func (c *ISCSIConnector) getSessionByTargetInfo(ctx context.Context,
 }
 
 func (c *ISCSIConnector) findHCTLByISCSISessionID(
-	ctx context.Context, sessionID string, lun string) (scsi.HCTL, error) {
+	ctx context.Context, sessionID string, lun string,
+) (scsi.HCTL, error) {
 	defer tracer.TraceFuncCall(ctx, "ISCSIConnector.findHCTLByISCSISessionID")()
 	result := scsi.HCTL{}
 	sessionPattern := "/sys/class/iscsi_host/host*/device/session%s"

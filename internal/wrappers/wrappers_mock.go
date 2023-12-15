@@ -19,10 +19,11 @@ package wrappers
 
 import (
 	context "context"
-	goiscsi "github.com/dell/goiscsi"
-	gomock "github.com/golang/mock/gomock"
 	os "os"
 	reflect "reflect"
+
+	goiscsi "github.com/dell/goiscsi"
+	gomock "github.com/golang/mock/gomock"
 )
 
 // MockLimitedFileInfo is a mock of LimitedFileInfo interface
@@ -218,7 +219,7 @@ func (m *MockLimitedIOUtil) EXPECT() *MockLimitedIOUtilMockRecorder {
 }
 
 // ReadFile mocks base method
-func (m *MockLimitedIOUtil) ReadFile(filename string) ([]byte, error) {
+func (m *MockLimitedOS) ReadFile(filename string) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadFile", filename)
 	ret0, _ := ret[0].([]byte)
@@ -227,9 +228,9 @@ func (m *MockLimitedIOUtil) ReadFile(filename string) ([]byte, error) {
 }
 
 // ReadFile indicates an expected call of ReadFile
-func (mr *MockLimitedIOUtilMockRecorder) ReadFile(filename interface{}) *gomock.Call {
+func (mr *MockLimitedOSMockRecorder) ReadFile(filename interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockLimitedIOUtil)(nil).ReadFile), filename)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockLimitedOS)(nil).ReadFile), filename)
 }
 
 // MockLimitedFilepath is a mock of LimitedFilepath interface

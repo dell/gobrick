@@ -21,8 +21,10 @@ import (
 	"errors"
 	"os"
 
-	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/dell/goiscsi"
+
+	wrp "github.com/dell/gobrick/internal/wrappers"
+
 	"github.com/golang/mock/gomock"
 )
 
@@ -106,7 +108,7 @@ func (mh *MockHelper) OSStatFileInfoIsDirOK(m *wrp.MockLimitedFileInfo) *gomock.
 func (mh *MockHelper) OSOpenFileCall(m *wrp.MockLimitedOS) *gomock.Call {
 	return m.EXPECT().OpenFile(
 		mh.OSOpenFileCallPath,
-		os.O_APPEND|os.O_WRONLY, os.FileMode(0200))
+		os.O_APPEND|os.O_WRONLY, os.FileMode(0o200))
 }
 
 // OSOpenFileCallErr mocks returning error from OSOpenFileCall
@@ -199,7 +201,8 @@ func (mh *MockHelper) OSExecCommandContextCall(m *wrp.MockLimitedOSExec) *gomock
 
 // OSExecCommandContextOK mocks returning success from OSExecCommandContextCall
 func (mh *MockHelper) OSExecCommandContextOK(m *wrp.MockLimitedOSExec) (
-	*gomock.Call, *wrp.MockLimitedOSExecCmd) {
+	*gomock.Call, *wrp.MockLimitedOSExecCmd,
+) {
 	cmdMock := wrp.NewMockLimitedOSExecCmd(mh.Ctrl)
 	call := mh.OSExecCommandContextCall(m).Return(cmdMock)
 	return call, cmdMock

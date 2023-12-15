@@ -23,12 +23,13 @@ package powerpath
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/dell/gobrick/pkg/utils"
 	log "github.com/sirupsen/logrus"
-	"strings"
 )
 
 const (
@@ -95,6 +96,7 @@ func (mp *Powerpath) isDaemonRunning(ctx context.Context) bool {
 	}
 	return true
 }
+
 func (mp *Powerpath) getPowerPathDevices(ctx context.Context, devices []string) (string, error) {
 	logger.Info(ctx, "powerpath - trying to find powerpath emc name inside powerpath module")
 	var match string
@@ -106,10 +108,10 @@ func (mp *Powerpath) getPowerPathDevices(ctx context.Context, devices []string) 
 			return "", err
 		}
 		op := strings.Split(string(out), "\n")
-		//L#0 Pseudo name=emcpowerc
-		//L#1 Symmetrix ID=000197901586
-		//L#3 Logical device ID=00002DCE
-		//L#4 Device WWN=60000970000197901586533032444345
+		// L#0 Pseudo name=emcpowerc
+		// L#1 Symmetrix ID=000197901586
+		// L#3 Logical device ID=00002DCE
+		// L#4 Device WWN=60000970000197901586533032444345
 		for _, line := range op {
 			if strings.Contains(line, "Pseudo name") {
 				tokens := strings.Split(line, "=")

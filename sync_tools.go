@@ -82,7 +82,6 @@ func (c *ttlCache) purge() {
 			delete(c.entries, key)
 		}
 	}
-
 }
 
 func (c *ttlCache) Stop() {

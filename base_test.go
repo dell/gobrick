@@ -24,56 +24,35 @@ import (
 )
 
 type baseMockHelper struct {
-	Ctx                                   interface{}
-	MultipathAddWWIDCallWWID              string
-	MultipathAddPathCallPath              string
-	MultipathDelPathCallPath              string
-	MultipathFlushDeviceCallMapName       string
-	MultipathGetDMWWIDCallMapName         string
-	MultipathIsDaemonRunningOKReturn      bool
-	MultipathGetDMWWIDOKReturn            string
-	SCSIIsDeviceExistCallDevice           string
-	SCSIRescanSCSIHostByHCTLCallH         scsi.HCTL
-	SCSIRescanSCSIDeviceByHCTLCallH       scsi.HCTL
-	SCSIDeleteSCSIDeviceByHCTLCallH       scsi.HCTL
-	SCSIDeleteSCSIDeviceByNameCallName    string
-	SCSIDeleteSCSIDeviceByPathCallPath    string
-	SCSIGetDeviceWWNCallDevices           []string
-	SCSIGetDevicesByWWNCallWWN            string
-	SCSIGetDMDeviceByChildrenCallDevices  []string
-	SCSIGetDMChildrenCallDmPath           string
-	SCSICheckDeviceIsValidCallDevice      string
-	SCSIGetDeviceNameByHCTLCallH          scsi.HCTL
-	SCSIWaitUdevSymlinkCallDevice         string
-	SCSIWaitUdevSymlinkCallWWN            string
-	SCSICheckDeviceIsValidOKReturn        bool
-	SCSIIsDeviceExistOKReturn             bool
-	SCSIGetDeviceWWNOKReturn              string
-	SCSIGetDevicesByWWNOKReturn           []string
-	SCSIGetDMDeviceByChildrenOKReturn     string
-	SCSIGetDMChildrenOKReturn             []string
-	SCSIGetDeviceNameByHCTLOKReturn       string
-	FilePathGlobOKReturn                  string
-	FilePathGlobCallPattern               string
-	FilePathGlobOK                        []string
-	ISCSILibGetSessionsOK                 []string
-	ISCSILibGetSessionsOKReturn           string
-	ISCSILibGetInitiatorsOK               string
-	ISCSILibGetInitiatorsOKReturn         string
-	ISCSILibPerformLoginOK                string
-	ISCSILibPerformLoginCallTarget        string
-	ISCSILibCreateOrUpdateNodeOK          string
-	OSReadFileCallPath                    string
-	OSReadFileOK                          string
-	OSReadFileOKReturn                    string
-	OSStatCallPath                        string
-	OSStatCallOK                          string
-	OSStatFileInfoIsDirOKReturn           string
-	OSStatFileInfoIsDirOK                 string
-	ISCSILibCreateOrUpdateNodeCallTarget  string
-	ISCSILibCreateOrUpdateNodeCallOptions string
-	ISCSILibCreateOrUpdateNodeCallTarget  string
-
+	Ctx                                  interface{}
+	MultipathAddWWIDCallWWID             string
+	MultipathAddPathCallPath             string
+	MultipathDelPathCallPath             string
+	MultipathFlushDeviceCallMapName      string
+	MultipathGetDMWWIDCallMapName        string
+	MultipathIsDaemonRunningOKReturn     bool
+	MultipathGetDMWWIDOKReturn           string
+	SCSIIsDeviceExistCallDevice          string
+	SCSIRescanSCSIHostByHCTLCallH        scsi.HCTL
+	SCSIRescanSCSIDeviceByHCTLCallH      scsi.HCTL
+	SCSIDeleteSCSIDeviceByHCTLCallH      scsi.HCTL
+	SCSIDeleteSCSIDeviceByNameCallName   string
+	SCSIDeleteSCSIDeviceByPathCallPath   string
+	SCSIGetDeviceWWNCallDevices          []string
+	SCSIGetDevicesByWWNCallWWN           string
+	SCSIGetDMDeviceByChildrenCallDevices []string
+	SCSIGetDMChildrenCallDmPath          string
+	SCSICheckDeviceIsValidCallDevice     string
+	SCSIGetDeviceNameByHCTLCallH         scsi.HCTL
+	SCSIWaitUdevSymlinkCallDevice        string
+	SCSIWaitUdevSymlinkCallWWN           string
+	SCSICheckDeviceIsValidOKReturn       bool
+	SCSIIsDeviceExistOKReturn            bool
+	SCSIGetDeviceWWNOKReturn             string
+	SCSIGetDevicesByWWNOKReturn          []string
+	SCSIGetDMDeviceByChildrenOKReturn    string
+	SCSIGetDMChildrenOKReturn            []string
+	SCSIGetDeviceNameByHCTLOKReturn      string
 	mh.MockHelper
 }
 

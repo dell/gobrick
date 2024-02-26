@@ -249,7 +249,7 @@ func Test_scsi_RescanSCSIDeviceByHCTL(t *testing.T) {
 		{
 			name:        "HCTL is not full",
 			fields:      getDefaultSCSIFields(ctrl),
-			stateSetter: func(fields scsiFields) {},
+			stateSetter: func(_ scsiFields) {},
 			args:        args{ctx: ctx, h: getHostOnlyHCTL()},
 			wantErr:     true,
 		},
@@ -955,7 +955,7 @@ func Test_scsi_GetDeviceNameByHCTL(t *testing.T) {
 		{
 			name:        "invalid HCTL",
 			fields:      getDefaultSCSIFields(ctrl),
-			stateSetter: func(fields scsiFields) {},
+			stateSetter: func(_ scsiFields) {},
 			args:        args{ctx: ctx, h: getHostOnlyHCTL()},
 			want:        "",
 			wantErr:     true,

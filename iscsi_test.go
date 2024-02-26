@@ -320,7 +320,7 @@ func TestISCSIConnector_ConnectVolume(t *testing.T) {
 		{
 			name:        "empty request",
 			fields:      getDefaultISCSIFields(ctrl),
-			stateSetter: func(fields iscsiFields) {},
+			stateSetter: func(_ iscsiFields) {},
 			args:        args{ctx: ctx, info: ISCSIVolumeInfo{}},
 			want:        Device{},
 			wantErr:     true,

@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"math"
 	"path"
 	"strconv"
@@ -197,6 +198,12 @@ func (fc *FCConnector) GetInitiatorPorts(ctx context.Context) ([]string, error) 
 
 func (fc *FCConnector) cleanConnection(ctx context.Context, force bool, info FCVolumeInfo) error {
 	defer tracer.TraceFuncCall(ctx, "FCConnector.cleanConnection")()
+	logger.Debug(ctx, "multipath output start of cleanConnection...")
+	data, err := fc.multipath.ListPaths(ctx)
+	if err != nil {
+		logger.Debug(ctx, "err: "+err.Error()+" while doing ll")
+	}
+	logger.Debug(ctx, data, time.Now().UTC())
 	hbas, err := fc.getFCHBASInfo(ctx)
 	if err != nil {
 		logger.Error(ctx, "failed to get FC hbas info: %s", err.Error())
@@ -243,10 +250,22 @@ func (fc *FCConnector) connectDevice(
 	ctx context.Context, hbas []FCHBA, info FCVolumeInfo,
 ) (Device, error) {
 	defer tracer.TraceFuncCall(ctx, "FCConnector.connectDevice")()
+	logger.Debug(ctx, "multipath output before waitForDeviceWWN...")
+	data, err := fc.multipath.ListPaths(ctx)
+	if err != nil {
+		logger.Debug(ctx, "err: "+err.Error()+" while doing ll")
+	}
+	logger.Debug(ctx, data, time.Now().UTC())
 	wwn, err := fc.waitForDeviceWWN(ctx, hbas, info)
 	if err != nil {
 		return Device{}, err
 	}
+	logger.Debug(ctx, "multipath output after waitForDeviceWWN...")
+	data, err = fc.multipath.ListPaths(ctx)
+	if err != nil {
+		logger.Debug(ctx, "err: "+err.Error()+" while doing ll")
+	}
+	logger.Debug(ctx, data, time.Now().UTC())
 	devices, err := fc.scsi.GetDevicesByWWN(ctx, wwn)
 	if err != nil || len(devices) == 0 {
 		msg := "failed to get devices by WWN: " + wwn
@@ -312,7 +331,13 @@ func (fc *FCConnector) waitMultipathDevice(
 	ctx context.Context, wwn string, devices []string,
 ) (string, error) {
 	defer tracer.TraceFuncCall(ctx, "FCConnector.waitMultipathDevice")()
-	err := fc.multipath.AddWWID(ctx, wwn)
+	logger.Debug(ctx, "multipath output before AddWWID...")
+	data, err := fc.multipath.ListPaths(ctx)
+	if err != nil {
+		logger.Debug(ctx, "err: "+err.Error()+" while doing ll")
+	}
+	logger.Debug(ctx, data, time.Now().UTC())
+	err = fc.multipath.AddWWID(ctx, wwn)
 	if err != nil {
 		return "", err
 	}
@@ -323,6 +348,13 @@ func (fc *FCConnector) waitMultipathDevice(
 			logger.Info(ctx, err.Error())
 		}
 	}
+
+	logger.Debug(ctx, "multipath output after AddWWID...")
+	data, err = fc.multipath.ListPaths(ctx)
+	if err != nil {
+		logger.Debug(ctx, "err: "+err.Error()+" while doing ll")
+	}
+	logger.Debug(ctx, data, time.Now().UTC())
 
 	var mpath string
 	for i := 0; i < int(fc.waitDeviceRegisterTimeout.Seconds()); i++ {
@@ -340,6 +372,13 @@ func (fc *FCConnector) waitMultipathDevice(
 		}
 		time.Sleep(time.Second)
 	}
+	logger.Debug(ctx, "multipath output after WaitUdevSymlink...")
+	data, err = fc.multipath.ListPaths(ctx)
+	if err != nil {
+		logger.Debug(ctx, "err: "+err.Error()+" while doing ll")
+	}
+	logger.Debug(ctx, data, time.Now().UTC())
+
 	if mpath == "" {
 		msg := fmt.Sprintf("multipath device for WWN %s not found", wwn)
 		logger.Error(ctx, msg)
@@ -388,7 +427,6 @@ func (fc *FCConnector) waitForDeviceWWN(
 	secondsNextScan = 1
 
 	doScans := true
-
 	for doScans {
 		var hctlsToRescan []scsi.HCTL
 		var hctlsToDiscover []scsi.HCTL
@@ -487,6 +525,7 @@ func (fc *FCConnector) findHCTLsForFCHBA(
 		targetMap[m] = strings.Replace(
 			strings.TrimSpace(string(data)), "0x", "", 1)
 	}
+	log.Debugf("%s findHCTLsForFCHBA: targetMap: %+v", time.Now().UTC(), targetMap)
 	lun := strconv.FormatInt(int64(info.Lun), 10)
 
 	var hctlsToDiscover []scsi.HCTL

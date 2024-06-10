@@ -29,4 +29,5 @@ type Multipath interface {
 	FlushDevice(ctx context.Context, deviceMapName string) error
 	IsDaemonRunning(ctx context.Context) bool
 	GetDMWWID(ctx context.Context, deviceMapName string) (string, error)
+	ListPaths(ctx context.Context) (string, error)
 }

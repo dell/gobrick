@@ -191,9 +191,24 @@ func (mp *Multipath) runCommand(ctx context.Context, command string, args []stri
 		args = append([]string{mp.chroot, command}, args...)
 		command = "chroot"
 	}
-	logger.
-		Info(ctx, "multipath command: %s args: %s", command, strings.Join(args, " "))
+	logger.Info(ctx, "multipath command: %s args: %s", command, strings.Join(args, " "))
 	data, err := mp.osexec.CommandContext(ctx, command, args...).CombinedOutput()
 	logger.Debug(ctx, "multipath command output: %s", string(data))
 	return data, err
+}
+
+func (mp *Multipath) ListPaths(ctx context.Context) (string, error) {
+	defer tracer.TraceFuncCall(ctx, "multipath.ListPaths")()
+	listCmdArg := []string{"-ll"}
+	var output string
+	data, err := mp.runCommand(ctx, multipathDaemon, listCmdArg)
+	if err != nil {
+		return "", err
+	}
+	output = string(data)
+	if strings.TrimSpace(output) == "timeout" {
+		return "", errors.New(" timeout error")
+	}
+	logger.Debug(ctx, "timeout reading from multipathd, retry")
+	return output, nil
 }

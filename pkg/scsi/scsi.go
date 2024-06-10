@@ -358,6 +358,8 @@ func (s *Scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (str
 				logger.Error(ctx, "multipath - failed to read dm id file: %s", err.Error())
 				continue
 			}
+			info := fmt.Sprintf("%s - match %s", fmt.Sprintf(pattern, d), string(data))
+			logger.Info(ctx, "getDMDeviceByChildren...", info, time.Now().UTC())
 			if strings.HasPrefix(string(data), "mpath") {
 				_, dm := path.Split(m)
 				if match == "" {
@@ -452,6 +454,8 @@ func (s *Scsi) getDevicesByWWN(ctx context.Context, wwn string) ([]string, error
 			if err != nil {
 				continue
 			}
+			info := fmt.Sprintf("/sys/block/%s : wwn: %s", devName, devWWN)
+			logger.Debug(ctx, info, time.Now().UTC())
 			if devs, ok := result[devWWN]; ok {
 				result[devWWN] = append(devs, devName)
 			} else {

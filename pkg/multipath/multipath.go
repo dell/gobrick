@@ -201,7 +201,7 @@ func (mp *Multipath) ListPaths(ctx context.Context) (string, error) {
 	defer tracer.TraceFuncCall(ctx, "multipath.ListPaths")()
 	listCmdArg := []string{"-ll"}
 	var output string
-	data, err := mp.runCommand(ctx, multipathDaemon, listCmdArg)
+	data, err := mp.runCommand(ctx, multipathTool, listCmdArg)
 	if err != nil {
 		return "", err
 	}

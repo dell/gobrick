@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"sort"
 	"strings"
@@ -358,13 +359,15 @@ func (s *Scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (str
 				logger.Error(ctx, "multipath - failed to read dm id file: %s", err.Error())
 				continue
 			}
-			info := fmt.Sprintf("%s - match %s", fmt.Sprintf(pattern, d), string(data))
+			info := fmt.Sprintf("%s - match %s", m, string(data))
 			logger.Info(ctx, "getDMDeviceByChildren...", info, time.Now().UTC())
 			if strings.HasPrefix(string(data), "mpath") {
 				_, dm := path.Split(m)
 				if match == "" {
 					match = dm
+					logger.Info(ctx, "getDMDeviceByChildren...match == dm...", match, dm, time.Now().UTC())
 				} else if dm != match {
+					logger.Info(ctx, "getDMDeviceByChildren...match != dm...", match, dm, time.Now().UTC())
 					return "", &DevicesHaveDifferentParentsErr{}
 				}
 			}
@@ -553,6 +556,12 @@ func (s *Scsi) rescanSCSIDeviceByHCTL(ctx context.Context, h HCTL) error {
 
 func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn string) error {
 	var checkPath string
+	buf, err := exec.Command("ls", "-la", diskByIDPath).CombinedOutput()
+	if err != nil {
+		log.Printf("Check for ls -la %s err", err.Error())
+		return err
+	}
+	log.Printf("**: ls -la: %s date: %s", string(buf), time.Now().UTC())
 	if strings.HasPrefix(deviceName, "dm-") {
 		checkPath = diskByIDDMPath + wwn
 	} else {

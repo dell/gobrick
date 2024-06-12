@@ -346,6 +346,12 @@ func (fc *FCConnector) waitMultipathDevice(
 		devPath := path.Join("/dev/", d)
 		if err := fc.multipath.AddPath(ctx, devPath); err != nil {
 			logger.Info(ctx, err.Error())
+			logger.Debug(ctx, "multipath output when fail AddPath...", devPath)
+			data, err = fc.multipath.ListPaths(ctx)
+			if err != nil {
+				logger.Debug(ctx, "err: "+err.Error()+" while doing ll")
+			}
+			logger.Debug(ctx, data, time.Now().UTC())
 		}
 	}
 

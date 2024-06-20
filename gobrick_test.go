@@ -33,6 +33,7 @@ var (
 	validLunNumber     = 199
 	validSCSIHost1     = "34"
 	validSCSIHost2     = "35"
+	validNQN           = "11aaa111111111a11a111a1111aa1111"
 	validHostOnlyHCTL1 = scsi.HCTL{Host: validSCSIHost1, Channel: "-", Target: "-", Lun: "-"}
 	validHostOnlyHCTL2 = scsi.HCTL{Host: validSCSIHost2, Channel: "-", Target: "-", Lun: "-"}
 	validHCTL1         = scsi.HCTL{

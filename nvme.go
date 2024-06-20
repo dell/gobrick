@@ -279,13 +279,13 @@ func (c *NVMeConnector) cleanConnection(ctx context.Context, force bool, info NV
 	}
 	var devicePath string
 	var namespace string
-	logger.Debug(ctx, "DevicePathsAndNamespaces", DevicePathsAndNamespaces)
+	log.Debugf("DevicePathsAndNamespaces: %s", DevicePathsAndNamespaces)
 	for _, DevicePathAndNamespace := range DevicePathsAndNamespaces {
 		devicePath = DevicePathAndNamespace.DevicePath
 		namespace = DevicePathAndNamespace.Namespace
 		nguid, newnamespace, _ := c.nvmeLib.GetNVMeDeviceData(devicePath)
-		logger.Debug(ctx, "nguid, wwn, newnamespace, namespace", nguid, wwn, newnamespace, namespace)
-		if c.wwnMatches(ctx, nguid, wwn) && namespace == newnamespace {
+		log.Debugf("nguid: %s, wwn: %s, newnamespace: %s, namespace: %s", nguid, wwn, newnamespace, namespace)
+		if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
 			devices = append(devices, devicePath)
 		}
 	}
@@ -496,13 +496,13 @@ func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, 
 		var devicePaths []string
 		var devicePath string
 		var namespace string
-		logger.Debug(ctx, "DevicePathsAndNamespaces", DevicePathsAndNamespaces, "retryCount", retryCount)
+		log.Debugf("DevicePathsAndNamespaces %+v retryCount %d", DevicePathsAndNamespaces, retryCount)
 		for _, DevicePathAndNamespace := range DevicePathsAndNamespaces {
 			devicePath = DevicePathAndNamespace.DevicePath
 			namespace = DevicePathAndNamespace.Namespace
 			nguid, newnamespace, _ := c.nvmeLib.GetNVMeDeviceData(devicePath)
-			logger.Debug(ctx, "nguid, wwn, newnamespace, namespace", nguid, wwn, newnamespace, namespace)
-			if c.wwnMatches(ctx, nguid, wwn) && namespace == newnamespace {
+			log.Debugf("nguid %s, wwn %s, newnamespace %s, namespace %s", nguid, wwn, newnamespace, namespace)
+			if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
 				devicePaths = append(devicePaths, devicePath)
 				nguidResult = nguid
 				// using two nvme devices for each volume for the multipath discovery
@@ -526,19 +526,21 @@ func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, 
 	result <- devicePathResult
 }
 
-func (c *NVMeConnector) wwnMatches(ctx context.Context, nguid, wwn string) bool {
+func (c *NVMeConnector) wwnMatches(nguid, wwn string) bool {
 	/*
-		Sample wwn : naa.68ccf098001111a2222b3d4444a1b23c
-		wwn1 : 1111a2222b3d4444
-		wwn2 : a1b23c
+			Sample wwn : naa.68ccf098001111a2222b3d4444a1b23c
+			wwn1 : 1111a2222b3d4444
+			wwn2 : a1b23c
 
-		Sample nguid : 1111a2222b3d44448ccf096800a1b23c
+			Sample nguid : 1111a2222b3d44448ccf096800a1b23c
 
-		/ pmax:
-		nguid: 12635330303134340000976000012000
-		wwn:   60000970000120001263533030313434
-		nguid: wwn[last16] 		+ wwn[1:6] 	+ wwn[0] + wwn[7:15]
-			   1263533030313434 + 000097 	+ 6		 + 000012000
+			/ pmax:
+			nguid: 12635330303134340000976000012000
+			wwn:   60000970000120001263533030313434
+		           11aaa111111111a11a111a1111aa1111
+		           1a111a1111aa1111 1aaa11 1 1111111a1
+			nguid: wwn[last16] 		+ wwn[1:6] 	+ wwn[0] + wwn[7:15]
+				   1263533030313434 + 000097 	+ 6		 + 000012000
 	*/
 	if len(wwn) < 32 {
 		return false
@@ -555,7 +557,7 @@ func (c *NVMeConnector) wwnMatches(ctx context.Context, nguid, wwn string) bool 
 		// pmax
 		wwn1 = wwn[16:]
 		wwn2 = wwn[1:7]
-		logger.Info(ctx, "Powermax:", wwn1, wwn2, nguid, strings.HasPrefix(nguid, wwn1+wwn2))
+		log.Infof("Powermax: %s %s %s %t", wwn1, wwn2, nguid, strings.HasPrefix(nguid, wwn1+wwn2))
 		if strings.HasPrefix(nguid, wwn1+wwn2) {
 			return true
 		}

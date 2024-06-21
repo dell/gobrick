@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dell/gobrick/internal/powerpath"
+
 	"github.com/dell/gobrick/internal/mockhelper"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
@@ -91,6 +93,7 @@ type iscsiFields struct {
 	scsi          *intscsi.MockSCSI
 	iscsiLib      *wrp.MockISCSILib
 	filePath      *wrp.MockLimitedFilepath
+	powerpath     *powerpath.MockPowerpath
 
 	manualSessionManagement                bool
 	waitDeviceTimeout                      time.Duration
@@ -106,12 +109,14 @@ func getDefaultISCSIFields(ctrl *gomock.Controller) iscsiFields {
 	bc := con.baseConnector
 	mpMock := intmultipath.NewMockMultipath(ctrl)
 	scsiMock := intscsi.NewMockSCSI(ctrl)
+	ppath := powerpath.NewMockPowerpath(ctrl)
 	bc.multipath = mpMock
 	bc.scsi = scsiMock
 	return iscsiFields{
 		baseConnector:                          bc,
 		multipath:                              mpMock,
 		scsi:                                   scsiMock,
+		powerpath:                              ppath,
 		iscsiLib:                               wrp.NewMockISCSILib(ctrl),
 		filePath:                               wrp.NewMockLimitedFilepath(ctrl),
 		manualSessionManagement:                con.manualSessionManagement,
@@ -394,6 +399,7 @@ func TestISCSIConnector_ConnectVolume(t *testing.T) {
 				baseConnector:                          tt.fields.baseConnector,
 				multipath:                              tt.fields.multipath,
 				scsi:                                   tt.fields.scsi,
+				powerpath:                              tt.fields.powerpath,
 				iscsiLib:                               tt.fields.iscsiLib,
 				manualSessionManagement:                tt.fields.manualSessionManagement,
 				waitDeviceTimeout:                      tt.fields.waitDeviceTimeout,
@@ -467,6 +473,7 @@ func TestISCSIConnector_GetInitiatorName(t *testing.T) {
 			c := &ISCSIConnector{
 				baseConnector:                          tt.fields.baseConnector,
 				multipath:                              tt.fields.multipath,
+				powerpath:                              tt.fields.powerpath,
 				scsi:                                   tt.fields.scsi,
 				iscsiLib:                               tt.fields.iscsiLib,
 				manualSessionManagement:                tt.fields.manualSessionManagement,
@@ -556,7 +563,7 @@ func TestISCSIConnector_DisconnectVolume(t *testing.T) {
 				mock.SCSIGetDeviceNameByHCTLCallH = validHCTL2
 				mock.SCSIGetDeviceNameByHCTLOK(fields.scsi)
 
-				BaseConnectorCleanDeviceMock(&mock, fields.scsi, fields.multipath)
+				BaseConnectorCleanDeviceMock(&mock, fields.scsi)
 			},
 			args:    defaultArgs,
 			wantErr: false,
@@ -567,6 +574,7 @@ func TestISCSIConnector_DisconnectVolume(t *testing.T) {
 			c := &ISCSIConnector{
 				baseConnector:                          tt.fields.baseConnector,
 				multipath:                              tt.fields.multipath,
+				powerpath:                              tt.fields.powerpath,
 				scsi:                                   tt.fields.scsi,
 				iscsiLib:                               tt.fields.iscsiLib,
 				manualSessionManagement:                tt.fields.manualSessionManagement,
@@ -613,7 +621,7 @@ func TestISCSIConnector_DisconnectVolumeByDeviceName(t *testing.T) {
 			name:   "ok",
 			fields: getDefaultISCSIFields(ctrl),
 			stateSetter: func(fields iscsiFields) {
-				BaserConnectorDisconnectDevicesByDeviceNameMock(&mock, fields.scsi, fields.multipath)
+				BaserConnectorDisconnectDevicesByDeviceNameMock(&mock, fields.scsi)
 			},
 			args:    defaultArgs,
 			wantErr: false,
@@ -624,6 +632,7 @@ func TestISCSIConnector_DisconnectVolumeByDeviceName(t *testing.T) {
 			c := &ISCSIConnector{
 				baseConnector:                          tt.fields.baseConnector,
 				multipath:                              tt.fields.multipath,
+				powerpath:                              tt.fields.powerpath,
 				scsi:                                   tt.fields.scsi,
 				iscsiLib:                               tt.fields.iscsiLib,
 				manualSessionManagement:                tt.fields.manualSessionManagement,

@@ -203,7 +203,11 @@ func cleanConnectionMock(mock *baseMockHelper,
 	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1Target1
 	mock.SCSIGetDeviceNameByHCTLErr(scsi).AnyTimes()
 
-	BaseConnectorCleanDeviceMock(mock, scsi, multipath)
+	if mock.MultipathIsDaemonRunningOKReturn {
+		BaseConnectorCleanMultiPathDeviceMock(mock, scsi, multipath)
+	} else {
+		BaseConnectorCleanDeviceMock(mock, scsi)
+	}
 }
 
 func TestFCConnector_ConnectVolume(t *testing.T) {
@@ -438,7 +442,7 @@ func TestFCConnector_DisconnectVolumeByDeviceName(t *testing.T) {
 			fields: getDefaultFCFields(ctrl),
 			stateSetter: func(fields fcFields) {
 				BaserConnectorDisconnectDevicesByDeviceNameMock(
-					&mock, fields.scsi, fields.multipath)
+					&mock, fields.scsi)
 			},
 			args:    defaultArgs,
 			wantErr: false,

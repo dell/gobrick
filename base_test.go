@@ -381,7 +381,7 @@ func (bmh *baseMockHelper) SCSIWaitUdevSymlinkErr(
 	return bmh.SCSIWaitUdevSymlinkCall(m).Return(mh.ErrTest)
 }
 
-func BaseConnectorCleanDeviceMock(mock *baseMockHelper,
+func BaseConnectorCleanMultiPathDeviceMock(mock *baseMockHelper,
 	scsi *intscsi.MockSCSI, mp *intmultipath.MockMultipath,
 ) {
 	mock.SCSIGetDMDeviceByChildrenCallDevices = []string{
@@ -405,8 +405,22 @@ func BaseConnectorCleanDeviceMock(mock *baseMockHelper,
 	mock.MultipathDelPathOK(mp)
 }
 
+func BaseConnectorCleanDeviceMock(mock *baseMockHelper,
+	scsi *intscsi.MockSCSI,
+) {
+	mock.SCSIGetDMDeviceByChildrenCallDevices = []string{
+		mh.ValidDeviceName, mh.ValidDeviceName2,
+	}
+	mock.SCSIGetDMDeviceByChildrenErr(scsi)
+
+	mock.SCSIDeleteSCSIDeviceByNameCallName = mh.ValidDeviceName
+	mock.SCSIDeleteSCSIDeviceByNameOK(scsi)
+	mock.SCSIDeleteSCSIDeviceByNameCallName = mh.ValidDeviceName2
+	mock.SCSIDeleteSCSIDeviceByNameOK(scsi)
+}
+
 func BaserConnectorDisconnectDevicesByDeviceNameMock(mock *baseMockHelper,
-	scsi *intscsi.MockSCSI, mp *intmultipath.MockMultipath,
+	scsi *intscsi.MockSCSI,
 ) {
 	mock.SCSIIsDeviceExistCallDevice = mh.ValidDMName
 	mock.SCSIIsDeviceExistOKReturn = true
@@ -424,5 +438,5 @@ func BaserConnectorDisconnectDevicesByDeviceNameMock(mock *baseMockHelper,
 	mock.SCSIGetDevicesByWWNOKReturn = mh.ValidDevices
 	mock.SCSIGetDevicesByWWNOK(scsi)
 
-	BaseConnectorCleanDeviceMock(mock, scsi, mp)
+	BaseConnectorCleanDeviceMock(mock, scsi)
 }

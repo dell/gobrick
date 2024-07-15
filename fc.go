@@ -520,7 +520,7 @@ func (fc *FCConnector) findHCTLsForFCHBA(
 	if needFullRescan {
 		// at least one target port not found, do full scsi rescan
 		hctlsToRescan = []scsi.HCTL{{
-			Host: hostDev, Lun: "-",
+			Host: hostDev, Lun: lun,
 			Channel: "-", Target: "-",
 		}}
 	} else {

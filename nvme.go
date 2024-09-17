@@ -54,6 +54,12 @@ const (
 
 	// NVMePortDefault - NVMe TCP port
 	NVMePortDefault = ":4420"
+
+	// PowerMaxOUIPrefix - PowerMax format 6 OUI prefix
+	PowerMaxOUIPrefix = "6000097"
+
+	// PowerStoreOUIPrefix - PowerStore format 6 OUI prefix
+	PowerStoreOUIPrefix = "68ccf09"
 )
 
 // NVMeConnectorParams - type definition for NVMe connector params
@@ -526,15 +532,23 @@ func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, 
 	result <- devicePathResult
 }
 
+// wwnMatches checks if the given nguid and wwn match.
+//
+// Parameters:
+// - nguid: a string representing the nguid.
+// - wwn: a string representing the wwn.
+//
+// Returns:
+// - a boolean indicating whether the wwn matches the nguid.
 func (c *NVMeConnector) wwnMatches(nguid, wwn string) bool {
 	/*
+			// PowerStore
 			Sample wwn : naa.68ccf098001111a2222b3d4444a1b23c
-			wwn1 : 1111a2222b3d4444
-			wwn2 : a1b23c
-
+			token1: 1111a2222b3d4444
+			token2: a1b23c
 			Sample nguid : 1111a2222b3d44448ccf096800a1b23c
 
-			/ pmax:
+			// PowerMax
 			nguid: 12635330303134340000976000012000
 			wwn:   60000970000120001263533030313434
 		           11aaa111111111a11a111a1111aa1111
@@ -545,23 +559,29 @@ func (c *NVMeConnector) wwnMatches(nguid, wwn string) bool {
 	if len(wwn) < 32 {
 		return false
 	}
-	var wwn1, wwn2 string
-	if strings.Contains(wwn, "naa") {
-		// powerstore
-		wwn1 = wwn[13 : len(wwn)-7]
-		wwn2 = wwn[len(wwn)-6 : len(wwn)-1]
-		if strings.Contains(nguid, wwn1) && strings.Contains(nguid, wwn2) {
+
+	wwn = strings.ToLower(wwn)
+	if strings.HasPrefix(wwn, "naa.") {
+		wwn = wwn[4:]
+	}
+
+	var token1, token2 string
+	if strings.HasPrefix(wwn, PowerStoreOUIPrefix) {
+		token1 = wwn[13 : len(wwn)-7]
+		token2 = wwn[len(wwn)-6 : len(wwn)-1]
+		log.Infof("PowerStore: %s %s %s %t", token1, token2, nguid, strings.Contains(nguid, token2))
+		if strings.Contains(nguid, token1) && strings.Contains(nguid, token2) {
 			return true
 		}
-	} else {
-		// pmax
-		wwn1 = wwn[16:]
-		wwn2 = wwn[1:7]
-		log.Infof("Powermax: %s %s %s %t", wwn1, wwn2, nguid, strings.HasPrefix(nguid, wwn1+wwn2))
-		if strings.HasPrefix(nguid, wwn1+wwn2) {
+	} else if strings.HasPrefix(wwn, PowerMaxOUIPrefix) {
+		token1 = wwn[16:]
+		token2 = wwn[1:7]
+		log.Infof("Powermax: %s %s %s %t", token1, token2, nguid, strings.HasPrefix(nguid, token1+token2))
+		if strings.HasPrefix(nguid, token1+token2) {
 			return true
 		}
 	}
+
 	return false
 }
 

@@ -124,14 +124,9 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	//defaultArgs := args{ctx: ctx, info: validNVMEVolumeInfo}
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	/*mock := baseMockHelper{
-		Ctx: ctx,
-	}*/
 
 	tests := []struct {
 		name        string

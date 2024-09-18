@@ -18,10 +18,11 @@ package gobrick
 import (
 	"context"
 	"fmt"
-	"github.com/dell/gobrick/pkg/scsi"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/dell/gobrick/pkg/scsi"
 
 	"github.com/dell/gobrick/internal/powerpath"
 

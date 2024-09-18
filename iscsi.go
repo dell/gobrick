@@ -858,7 +858,7 @@ func (c *ISCSIConnector) findHCTLByISCSISessionID(
 	result.Host = strings.Split(matches[0], "/")[4][4:]
 	result.Channel = "-"
 	result.Target = "-"
-	result.Lun = lun
+	result.Lun = "-"
 
 	return result, nil
 }

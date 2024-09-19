@@ -203,6 +203,8 @@ busy: False
 			stateSetter: func(fields ppFields) {
 				_, cmdMock := mocks.OSExecCommandContextOK(fields.osexec)
 				mocks.OSExecCmdOK(cmdMock)
+                                _, cmdMock2 := mocks.OSExecCommandContextOK(fields.osexec)
+				mocks.OSExecCmdOK(cmdMock2)
 			},
 			args: defaultArgs,
 			want: true,

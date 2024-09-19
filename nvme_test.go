@@ -17,6 +17,7 @@ package gobrick
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -170,6 +171,33 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ConnectVolume() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNVME_wwnMatches(t *testing.T) {
+	tests := []struct {
+		nguid string
+		wwn   string
+		want  bool
+	}{
+		{nguid: "0f8da909812540628ccf09680039914f", wwn: "naa.68ccf098000f8da9098125406239914f", want: true},
+		{nguid: "0f8da909812540628ccf09680039914f", wwn: "NAA.68ccf098000f8da9098125406239914f", want: true},
+		{nguid: "0f8da909812540628ccf09680039914f", wwn: "68ccf098000f8da9098125406239914f", want: true},
+		{nguid: "0f8da909812540628ccf09680039914f", wwn: "68CCF098000F8DA9098125406239914F", want: true},
+		{nguid: "0f8da909812540628ccf09680039914f", wwn: "60000978000f8da9098125406239914f", want: false},
+		{nguid: "12635330303134340000976000012000", wwn: "60000970000120001263533030313434", want: true},
+		{nguid: "12635330303134340000976000012000", wwn: "68ccf070000120001263533030313434", want: false},
+		{nguid: "12635330303134340000976000012000", wwn: "8ccf070000120001263533030313434", want: false},
+		{nguid: "12635330303134340000976000012000", wwn: "68CCF070000120001263533030313434", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("(%s,%s) should be %v", tt.nguid, tt.wwn, tt.want), func(t *testing.T) {
+			c := &NVMeConnector{}
+			if c.wwnMatches(tt.nguid, tt.wwn) != tt.want {
+				t.Errorf("wwnMatches(%v, %v) = %v, want %v", tt.nguid, tt.wwn, !tt.want, tt.want)
 			}
 		})
 	}

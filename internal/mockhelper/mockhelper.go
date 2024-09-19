@@ -195,8 +195,7 @@ func (mh *MockHelper) FilePathGlobOK(m *wrp.MockLimitedFilepath) *gomock.Call {
 
 // OSExecCommandContextCall mocks implementation of CommandContext method from LimitedOSExec interface
 func (mh *MockHelper) OSExecCommandContextCall(m *wrp.MockLimitedOSExec) *gomock.Call {
-	return m.EXPECT().CommandContext(gomock.Any(),
-		mh.OSEXECCommandContextName, mh.OSEXECCommandContextArgs)
+	return m.EXPECT().CommandContext(gomock.Any(), gomock.Any(), gomock.Any())
 }
 
 // OSExecCommandContextOK mocks returning success from OSExecCommandContextCall

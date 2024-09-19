@@ -707,6 +707,6 @@ func (c *NVMeConnector) getFCHostInfo(ctx context.Context) ([]FCHBAInfo, error) 
 		FCHostInfo.NodeName = strings.TrimSpace(string(data))
 		FCHostsInfo = append(FCHostsInfo, FCHostInfo)
 	}
-	logger.Info(ctx, "FC hbas found: %s", FCHostsInfo)
+	logger.Info(ctx, "FC has been found: %s", FCHostsInfo)
 	return FCHostsInfo, nil
 }

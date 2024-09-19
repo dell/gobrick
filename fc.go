@@ -562,7 +562,7 @@ func (fc *FCConnector) getFCHBASInfo(ctx context.Context) ([]FCHBA, error) {
 		_, hba.HostDevice = path.Split(m)
 		hbas = append(hbas, hba)
 	}
-	logger.Info(ctx, "FC hbas found: %s", hbas)
+	logger.Info(ctx, "FC has been found: %s", hbas)
 	return hbas, nil
 }
 

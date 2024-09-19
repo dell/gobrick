@@ -112,7 +112,7 @@ func Test_powerpath_FlushDevice(t *testing.T) {
 	mocks := mh.MockHelper{
 		Ctrl:                     ctrl,
 		OSEXECCommandContextName: powerpathTool,
-		OSEXECCommandContextArgs: []string{"-f", mh.ValidDMName},
+		OSEXECCommandContextArgs: []string{"check", "force"},
 		OSEXECCmdOKReturn:        "ok",
 	}
 
@@ -179,7 +179,7 @@ func Test_powerpath_IsDaemonRunning(t *testing.T) {
 	mocks := mh.MockHelper{
 		Ctrl:                     ctrl,
 		OSEXECCommandContextName: powerpathDaemon,
-		OSEXECCommandContextArgs: []string{"show", "status"},
+		OSEXECCommandContextArgs: []string{"version"},
 		OSEXECCmdOKReturn: `
 path checker states:
 down                2
@@ -203,6 +203,8 @@ busy: False
 			stateSetter: func(fields ppFields) {
 				_, cmdMock := mocks.OSExecCommandContextOK(fields.osexec)
 				mocks.OSExecCmdOK(cmdMock)
+				_, cmdMock2 := mocks.OSExecCommandContextOK(fields.osexec)
+				mocks.OSExecCmdOK(cmdMock2)
 			},
 			args: defaultArgs,
 			want: true,

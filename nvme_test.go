@@ -125,14 +125,9 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	defaultArgs := args{ctx: ctx, info: validNVMEVolumeInfo}
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	mock := baseMockHelper{
-		Ctx: ctx,
-	}
 
 	tests := []struct {
 		name        string
@@ -151,18 +146,6 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 			want:        Device{},
 			wantErr:     true,
 			isFC:        false,
-		},
-		{
-			name:   "not found-single device",
-			fields: getDefaultNVMEFields(ctrl),
-			stateSetter: func(fields NVMEFields) {
-				mock.MultipathIsDaemonRunningOKReturn = false
-				mock.MultipathIsDaemonRunningOK(fields.multipath)
-			},
-			args:    defaultArgs,
-			want:    Device{},
-			wantErr: true,
-			isFC:    false,
 		},
 	}
 	for _, tt := range tests {

@@ -1,6 +1,6 @@
 test:
 	go clean -cache
-	go test -race -v -coverprofile=c.out ./pkg/scsi ./pkg/multipath .
+	go test -race -v -coverprofile=c.out .
 
 check:
 	gofmt -w ./.

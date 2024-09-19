@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dell/gobrick/pkg/scsi"
+
 	"github.com/dell/gobrick/internal/powerpath"
 
 	"github.com/dell/gobrick/internal/mockhelper"
@@ -35,11 +37,13 @@ import (
 )
 
 var (
-	validISCSIPortal1     = "1.1.1.1:3260"
-	validISCSITarget1     = "iqn.2015-10.com.dell:dellemc-foobar123"
-	validISCSIPortal2     = "1.1.1.1:3260"
-	validISCSITarget2     = "iqn.2015-10.com.dell:dellemc-spam789"
-	validISCSITargetInfo1 = ISCSITargetInfo{
+	validISCSIPortal1       = "1.1.1.1:3260"
+	validISCSITarget1       = "iqn.2015-10.com.dell:dellemc-foobar123"
+	validISCSIPortal2       = "1.1.1.1:3260"
+	validISCSITarget2       = "iqn.2015-10.com.dell:dellemc-spam789"
+	validHostOnlyIscsiHCTL1 = scsi.HCTL{Host: validSCSIHost1, Channel: "-", Target: "-", Lun: "-"}
+	validHostOnlyIscsiHCTL2 = scsi.HCTL{Host: validSCSIHost2, Channel: "-", Target: "-", Lun: "-"}
+	validISCSITargetInfo1   = ISCSITargetInfo{
 		Portal: validISCSIPortal1,
 		Target: validISCSITarget1,
 	}
@@ -214,10 +218,10 @@ func TestISCSIConnector_ConnectVolume(t *testing.T) {
 		mock.FilePathGlobOK(fields.filePath)
 
 		// first session
-		mock.SCSIRescanSCSIHostByHCTLCallH = validHostOnlyHCTL1
+		mock.SCSIRescanSCSIHostByHCTLCallH = validHostOnlyIscsiHCTL1
 		mock.SCSIRescanSCSIHostByHCTLOK(fields.scsi)
 		// second session
-		mock.SCSIRescanSCSIHostByHCTLCallH = validHostOnlyHCTL2
+		mock.SCSIRescanSCSIHostByHCTLCallH = validHostOnlyIscsiHCTL2
 		mock.SCSIRescanSCSIHostByHCTLOK(fields.scsi)
 
 		// findHCTLByISCSISessionID - match on target path

@@ -223,7 +223,7 @@ func (fc *FCConnector) cleanConnection(ctx context.Context, force bool, info FCV
 		}
 	}
 	logger.Info(ctx, "devices found: %s", devices)
-	return fc.baseConnector.cleanDevices(ctx, force, devices)
+	return fc.baseConnector.cleanDevices(ctx, force, devices, "")
 }
 
 func (fc *FCConnector) validateFCVolumeInfo(ctx context.Context, info FCVolumeInfo) error {

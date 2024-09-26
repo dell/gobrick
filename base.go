@@ -100,7 +100,7 @@ func (bc *baseConnector) disconnectDevicesByDeviceName(ctx context.Context, name
 		logger.Error(ctx, "failed to find devices by wwn: %s", err.Error())
 		return err
 	}
-	return bc.cleanDevices(ctx, false, devices)
+	return bc.cleanDevices(ctx, false, devices, wwn)
 }
 
 func (bc *baseConnector) disconnectNVMEDevicesByDeviceName(ctx context.Context, name string) error {
@@ -126,11 +126,11 @@ func (bc *baseConnector) disconnectNVMEDevicesByDeviceName(ctx context.Context, 
 		logger.Error(ctx, "failed to find devices by wwn: %s", err.Error())
 		return err
 	}
-	return bc.cleanNVMeDevices(ctx, false, devices)
+	return bc.cleanNVMeDevices(ctx, false, devices, wwn)
 }
 
 func (bc *baseConnector) cleanNVMeDevices(ctx context.Context,
-	force bool, devices []string,
+	force bool, devices []string, wwn string,
 ) error {
 	defer tracer.TraceFuncCall(ctx, "baseConnector.cleanNVMeDevices")()
 	var newDevices []string
@@ -142,7 +142,7 @@ func (bc *baseConnector) cleanNVMeDevices(ctx context.Context,
 	if err != nil {
 		logger.Info(ctx, "multipath device not found: %s", err.Error())
 	} else {
-		err := bc.cleanMultipathDevice(ctx, dm)
+		err := bc.cleanMultipathDevice(ctx, dm, wwn)
 		if err != nil {
 			msg := fmt.Sprintf("failed to flush multipath device: %s", err.Error())
 			logger.Error(ctx, msg)
@@ -167,14 +167,14 @@ func (bc *baseConnector) cleanNVMeDevices(ctx context.Context,
 }
 
 func (bc *baseConnector) cleanDevices(ctx context.Context,
-	force bool, devices []string,
+	force bool, devices []string, wwn string,
 ) error {
 	defer tracer.TraceFuncCall(ctx, "baseConnector.cleanDevices")()
 	dm, err := bc.scsi.GetDMDeviceByChildren(ctx, devices)
 	if err != nil {
 		logger.Info(ctx, "multipath device not found: %s", err.Error())
 	} else {
-		err := bc.cleanMultipathDevice(ctx, dm)
+		err := bc.cleanMultipathDevice(ctx, dm, wwn)
 		if err != nil {
 			msg := fmt.Sprintf("failed to flush multipath device: %s", err.Error())
 			logger.Error(ctx, msg)
@@ -204,15 +204,23 @@ func (bc *baseConnector) cleanDevices(ctx context.Context,
 	return nil
 }
 
-func (bc *baseConnector) cleanMultipathDevice(ctx context.Context, dm string) error {
+func (bc *baseConnector) cleanMultipathDevice(ctx context.Context, dm, wwid string) error {
 	defer tracer.TraceFuncCall(ctx, "baseConnector.cleanMultipathDevice")()
 	ctx, cancelFunc := context.WithTimeout(ctx, bc.multipathFlushTimeout)
 	defer cancelFunc()
+
+	if len(wwid) == 0 {
+		wwid, _ = bc.multipath.GetDMWWID(ctx, dm)
+	}
 
 	for i := 0; i < bc.multipathFlushRetries; i++ {
 		logger.Info(ctx, "trying to flush multipath device with retries: retry %d", i)
 		err := bc.retryFlushMultipathDevice(ctx, dm)
 		if err == nil {
+			err := bc.multipath.RemoveDeviceFromWWIDSFile(ctx, wwid)
+			if err != nil {
+				logger.Error(ctx, "failed to remove wwid %s from wwids file: %s", wwid, err.Error())
+			}
 			return nil
 		}
 	}

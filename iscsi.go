@@ -304,7 +304,7 @@ func (c *ISCSIConnector) cleanConnection(ctx context.Context, force bool, info I
 	if len(devices) == 0 {
 		return nil
 	}
-	return c.baseConnector.cleanDevices(ctx, force, devices)
+	return c.baseConnector.cleanDevices(ctx, force, devices, "")
 }
 
 func (c *ISCSIConnector) connectSingleDevice(

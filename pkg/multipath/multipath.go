@@ -87,6 +87,12 @@ func (mp *Multipath) FlushDevice(ctx context.Context, deviceMapName string) erro
 	return mp.flushDevice(ctx, deviceMapName)
 }
 
+// RemoveDeviceFromWWIDSFile removes multipath device from /etc/multipath/wwids file.
+func (mp *Multipath) RemoveDeviceFromWWIDSFile(ctx context.Context, wwid string) error {
+	defer tracer.TraceFuncCall(ctx, "multipath.RemoveDeviceFromWWIDSFile")()
+	return mp.removeDeviceFromWWIDSFile(ctx, wwid)
+}
+
 // IsDaemonRunning check if multipath daemon running
 func (mp *Multipath) IsDaemonRunning(ctx context.Context) bool {
 	defer tracer.TraceFuncCall(ctx, "multipath.IsDaemonRunning")()
@@ -146,6 +152,12 @@ func (mp *Multipath) isDaemonRunning(ctx context.Context) bool {
 func (mp *Multipath) flushDevice(ctx context.Context, deviceMapName string) error {
 	logger.Info(ctx, "multipath - start flush dm: %s", deviceMapName)
 	_, err := mp.runCommand(ctx, multipathTool, []string{"-f", deviceMapName})
+	return err
+}
+
+func (mp *Multipath) removeDeviceFromWWIDSFile(ctx context.Context, wwid string) error {
+	logger.Info(ctx, "multipath - remove from wwids file wwid: %s", wwid)
+	_, err := mp.runCommand(ctx, multipathTool, []string{"-w", wwid})
 	return err
 }
 

@@ -298,7 +298,7 @@ func (c *NVMeConnector) cleanConnection(ctx context.Context, force bool, info NV
 	if len(devices) == 0 {
 		return nil
 	}
-	return c.baseConnector.cleanNVMeDevices(ctx, force, devices)
+	return c.baseConnector.cleanNVMeDevices(ctx, force, devices, wwn)
 }
 
 func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolumeInfo, useFC bool) (Device, error) {

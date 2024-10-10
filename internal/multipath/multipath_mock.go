@@ -130,3 +130,17 @@ func (mr *MockMultipathMockRecorder) GetDMWWID(ctx, deviceMapName interface{}) *
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDMWWID", reflect.TypeOf((*MockMultipath)(nil).GetDMWWID), ctx, deviceMapName)
 }
+
+// RemoveDeviceFromWWIDSFile mocks base method.
+func (m *MockMultipath) RemoveDeviceFromWWIDSFile(ctx context.Context, wwid string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveDeviceFromWWIDSFile", ctx, wwid)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveDeviceFromWWIDSFile indicates an expected call of RemoveDeviceFromWWIDSFile.
+func (mr *MockMultipathMockRecorder) RemoveDeviceFromWWIDSFile(ctx, wwid interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveDeviceFromWWIDSFile", reflect.TypeOf((*MockMultipath)(nil).RemoveDeviceFromWWIDSFile), ctx, wwid)
+}

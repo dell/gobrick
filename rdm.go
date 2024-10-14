@@ -67,7 +67,7 @@ func (fc *FCConnector) cleanRDMConnection(ctx context.Context, force bool, info 
 		return errors.New(msg)
 	}
 	logger.Info(ctx, "devices found: %s", devices)
-	return fc.baseConnector.cleanDevices(ctx, force, devices)
+	return fc.baseConnector.cleanDevices(ctx, force, devices, wwn)
 }
 
 func (fc *FCConnector) validateRDMVolumeInfo(ctx context.Context, info RDMVolumeInfo) error {

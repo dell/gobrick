@@ -27,6 +27,7 @@ type Multipath interface {
 	AddPath(ctx context.Context, path string) error
 	DelPath(ctx context.Context, path string) error
 	FlushDevice(ctx context.Context, deviceMapName string) error
+	RemoveDeviceFromWWIDSFile(ctx context.Context, wwid string) error
 	IsDaemonRunning(ctx context.Context) bool
 	GetDMWWID(ctx context.Context, deviceMapName string) (string, error)
 }

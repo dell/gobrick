@@ -575,3 +575,67 @@ func Test_multipath_runCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestMultipath_RemoveDeviceFromWWIDSFile(t *testing.T) {
+	type args struct {
+		ctx  context.Context
+		wwid string
+	}
+	ctx := context.Background()
+
+	defaultArgs := args{ctx: ctx, wwid: mh.ValidWWID}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mocks := mh.MockHelper{
+		Ctrl:                     ctrl,
+		OSEXECCommandContextName: multipathDaemon,
+		OSEXECCommandContextArgs: []string{"-w", mh.ValidWWID},
+		OSEXECCmdOKReturn:        "ok",
+	}
+
+	tests := []struct {
+		name        string
+		fields      mpFields
+		stateSetter func(fields mpFields)
+		args        args
+		wantErr     bool
+	}{
+		{
+			name:   "ok",
+			fields: getDefaultMPFields(ctrl),
+			stateSetter: func(fields mpFields) {
+				_, cmdMock := mocks.OSExecCommandContextOK(fields.osexec)
+				mocks.OSEXECCmdOKReturn = "ok"
+				mocks.OSExecCmdOK(cmdMock)
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "exec error",
+			fields: getDefaultMPFields(ctrl),
+			stateSetter: func(fields mpFields) {
+				_, cmdMock := mocks.OSExecCommandContextOK(fields.osexec)
+				mocks.OSExecCmdErr(cmdMock)
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mp := &Multipath{
+				chroot:   tt.fields.chroot,
+				osexec:   tt.fields.osexec,
+				filePath: tt.fields.filePath,
+			}
+			tt.stateSetter(tt.fields)
+			if err := mp.RemoveDeviceFromWWIDSFile(tt.args.ctx, tt.args.wwid); (err != nil) != tt.wantErr {
+				t.Errorf("Multipath.RemoveDeviceFromWWIDSFile() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

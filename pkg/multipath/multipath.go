@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/dell/gobrick/internal/logger"
@@ -200,7 +201,7 @@ func (mp *Multipath) runCommand(ctx context.Context, command string, args []stri
 	}
 
 	if mp.chroot != "" {
-		args = append([]string{mp.chroot, command}, args...)
+		args = append([]string{mp.chroot + os.Getenv("MP_CHROOT_SUFFIX"), command}, args...)
 		command = "chroot"
 	}
 	logger.

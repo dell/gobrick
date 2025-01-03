@@ -176,6 +176,112 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 	}
 }
 
+func TestNVME_Connector_DisconnectVolume(t *testing.T) {
+	type args struct {
+		ctx  context.Context
+		info NVMeVolumeInfo
+	}
+
+	ctx := context.Background()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      NVMEFields
+		args        args
+		stateSetter func(fields NVMEFields)
+		wantErr     bool
+	}{
+		{
+			name:        "empty request",
+			fields:      getDefaultNVMEFields(ctrl),
+			stateSetter: func(_ NVMEFields) {},
+			args:        args{ctx: ctx, info: NVMeVolumeInfo{}},
+			wantErr:     false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &NVMeConnector{
+				baseConnector:             tt.fields.baseConnector,
+				multipath:                 tt.fields.multipath,
+				scsi:                      tt.fields.scsi,
+				nvmeLib:                   tt.fields.nvmeLib,
+				manualSessionManagement:   tt.fields.manualSessionManagement,
+				waitDeviceTimeout:         tt.fields.waitDeviceTimeout,
+				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
+				loginLock:                 tt.fields.loginLock,
+				limiter:                   tt.fields.limiter,
+				singleCall:                tt.fields.singleCall,
+				filePath:                  tt.fields.filePath,
+			}
+			tt.stateSetter(tt.fields)
+			err := c.DisconnectVolume(tt.args.ctx, tt.args.info)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DisconnectVolume() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestNVME_Connector_GetInitiatorName(t *testing.T) {
+	type args struct {
+		ctx  context.Context
+		info NVMeVolumeInfo
+	}
+
+	ctx := context.Background()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      NVMEFields
+		args        args
+		stateSetter func(fields NVMEFields)
+		want        []string
+		wantErr     bool
+	}{
+		{
+			name:        "request",
+			fields:      getDefaultNVMEFields(ctrl),
+			stateSetter: func(_ NVMEFields) {},
+			args:        args{ctx: ctx, info: NVMeVolumeInfo{}},
+			want:        []string{"nqn.1988-11.com.dell.mock:01:0000000000000"},
+			wantErr:     false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &NVMeConnector{
+				baseConnector:             tt.fields.baseConnector,
+				multipath:                 tt.fields.multipath,
+				scsi:                      tt.fields.scsi,
+				nvmeLib:                   tt.fields.nvmeLib,
+				manualSessionManagement:   tt.fields.manualSessionManagement,
+				waitDeviceTimeout:         tt.fields.waitDeviceTimeout,
+				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
+				loginLock:                 tt.fields.loginLock,
+				limiter:                   tt.fields.limiter,
+				singleCall:                tt.fields.singleCall,
+				filePath:                  tt.fields.filePath,
+			}
+			tt.stateSetter(tt.fields)
+			got, err := c.GetInitiatorName(tt.args.ctx)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetInitiatorName() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetInitiatorName() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNVME_wwnMatches(t *testing.T) {
 	tests := []struct {
 		nguid string

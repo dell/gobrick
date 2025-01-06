@@ -35,15 +35,17 @@ func TestConnectRDMVolume(t *testing.T) {
 	defer ctrl.Finish()
 
 	tests := []struct {
-		name    string
-		fields  fcFields
-		args    args
-		want    Device
-		wantErr bool
+		name        string
+		fields      fcFields
+		stateSetter func(fields fcFields)
+		args        args
+		want        Device
+		wantErr     bool
 	}{
 		{
-			name:   "Trying to connect without any target",
-			fields: getDefaultFCFields(ctrl),
+			name:        "Trying to connect without any target",
+			fields:      getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {},
 			args: args{
 				ctx: context.Background(),
 				info: RDMVolumeInfo{
@@ -56,8 +58,9 @@ func TestConnectRDMVolume(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:   "Trying to connect without wwn",
-			fields: getDefaultFCFields(ctrl),
+			name:        "Trying to connect without wwn",
+			fields:      getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {},
 			args: args{
 				ctx: context.Background(),
 				info: RDMVolumeInfo{
@@ -87,6 +90,7 @@ func TestConnectRDMVolume(t *testing.T) {
 				limiter:                   tt.fields.limiter,
 				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
 			}
+			tt.stateSetter(tt.fields)
 			got, err := fc.ConnectRDMVolume(tt.args.ctx, tt.args.info)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ConnectRDMVolume() error = %v, wantErr %v", err, tt.wantErr)

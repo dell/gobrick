@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"testing"
 
+	mh "github.com/dell/gobrick/internal/mockhelper"
 	"github.com/golang/mock/gomock"
 )
 
@@ -33,6 +34,13 @@ func TestConnectRDMVolume(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	mock := baseMockHelper{
+		MockHelper: mh.MockHelper{
+			Ctrl: ctrl,
+		},
+		Ctx: gomock.Any(),
+	}
 
 	tests := []struct {
 		name        string
@@ -74,6 +82,35 @@ func TestConnectRDMVolume(t *testing.T) {
 				},
 			},
 			want:    Device{},
+			wantErr: true,
+		},
+		{
+			name:   "Trying to connect",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				getFCHBASInfoMock(&mock, fields.os, fields.filePath)
+				waitForDeviceWWNMock(&mock, fields.filePath, fields.os, fields.scsi)
+				mock.SCSIGetDevicesByWWNCallWWN = mh.ValidWWID
+				mock.SCSIGetDevicesByWWNOKReturn = mh.ValidDevices
+				mock.SCSIGetDevicesByWWNOK(fields.scsi)
+				BaserConnectorDisconnectDevicesByDeviceNameMock(&mock, fields.scsi)
+			},
+			args: args{
+				ctx: context.Background(),
+				info: RDMVolumeInfo{
+					Targets: []FCTargetInfo{
+						{
+							WWPN: "3000000000000000",
+						},
+					},
+					Lun: 0,
+					WWN: mh.ValidWWID,
+				},
+			},
+			want: Device{
+				WWN:  mh.ValidWWID,
+				Name: mh.ValidDeviceName,
+			},
 			wantErr: true,
 		},
 	}

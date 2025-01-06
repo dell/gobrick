@@ -95,7 +95,7 @@ type NVMEFields struct {
 }
 
 func getDefaultNVMEFields(ctrl *gomock.Controller) NVMEFields {
-	con := NewNVMeConnector(NVMeConnectorParams{})
+	con := NewNVMeConnector(NVMeConnectorParams{MultipathFlushTimeout: 1})
 	bc := con.baseConnector
 	mpMock := intmultipath.NewMockMultipath(ctrl)
 	scsiMock := intscsi.NewMockSCSI(ctrl)

@@ -74,7 +74,7 @@ func TestConnectRDMVolume(t *testing.T) {
 				info: RDMVolumeInfo{
 					Targets: []FCTargetInfo{
 						{
-							WWPN: "3000000000000000",
+							WWPN: "",
 						},
 					},
 					Lun: 0,
@@ -100,7 +100,7 @@ func TestConnectRDMVolume(t *testing.T) {
 				info: RDMVolumeInfo{
 					Targets: []FCTargetInfo{
 						{
-							WWPN: "3000000000000000",
+							WWPN: "",
 						},
 					},
 					Lun: 0,

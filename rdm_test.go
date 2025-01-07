@@ -53,7 +53,7 @@ func TestConnectRDMVolume(t *testing.T) {
 		{
 			name:        "Trying to connect without any target",
 			fields:      getDefaultFCFields(ctrl),
-			stateSetter: func(fields fcFields) {},
+			stateSetter: func(_ fcFields) {},
 			args: args{
 				ctx: context.Background(),
 				info: RDMVolumeInfo{
@@ -68,7 +68,7 @@ func TestConnectRDMVolume(t *testing.T) {
 		{
 			name:        "Trying to connect without wwn",
 			fields:      getDefaultFCFields(ctrl),
-			stateSetter: func(fields fcFields) {},
+			stateSetter: func(_ fcFields) {},
 			args: args{
 				ctx: context.Background(),
 				info: RDMVolumeInfo{

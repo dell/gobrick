@@ -655,3 +655,141 @@ func TestISCSIConnector_DisconnectVolumeByDeviceName(t *testing.T) {
 		})
 	}
 }
+
+func TestISCSIConnector_connectPowerpathDevice(t *testing.T) {
+	type args struct {
+		ctx      context.Context
+		sessions []goiscsi.ISCSISession
+		info     ISCSIVolumeInfo
+	}
+
+	ctx := context.Background()
+	defaultArgs := args{ctx: ctx, info: validISCSIVolumeInfo}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := baseMockHelper{
+		Ctx: ctx,
+	}
+
+	tests := []struct {
+		name        string
+		fields      iscsiFields
+		stateSetter func(fields iscsiFields)
+		args        args
+		wantErr     bool
+	}{
+		{
+			name:   "successful connection",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				mock.ISCSILibGetSessionsOKReturn = validLibISCSISessions
+				mock.ISCSILibGetSessionsOK(fields.iscsiLib).Times(2)
+
+				mock.FilePathGlobCallPattern = "/sys/class/iscsi_host/host*/device/session%s"
+				mock.FilePathGlobOKReturn = []string{"device_path_1", "device_path_2"}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.SCSIGetDeviceWWNCallDevices = []string{"device_path_1", "device_path_2"}
+				mock.SCSIGetDeviceWWNOKReturn = "wwn_12345"
+				mock.SCSIGetDeviceWWNOK(fields.scsi)
+
+				mock.SCSIWaitUdevSymlinkCallWWN = mockhelper.ValidWWID
+				mock.SCSIWaitUdevSymlinkCallDevice = mockhelper.ValidDMName
+				mock.SCSIWaitUdevSymlinkOK(fields.scsi)
+
+				BaseConnectorCleanDeviceMock(&mock, fields.scsi)
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "discovery complete but devices not found",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				mock.ISCSILibGetSessionsOKReturn = validLibISCSISessions
+				mock.ISCSILibGetSessionsOK(fields.iscsiLib).Times(2)
+
+				mock.FilePathGlobCallPattern = "/sys/class/iscsi_host/host*/device/session%s"
+				mock.FilePathGlobOKReturn = []string{}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.SCSIGetDeviceWWNCallDevices = []string{"device_path_1", "device_path_2"}
+				mock.SCSIGetDeviceWWNOKReturn = "wwn_12345"
+				mock.SCSIGetDeviceWWNOK(fields.scsi)
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "timeout waiting for device registration",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				mock.ISCSILibGetSessionsOKReturn = validLibISCSISessions
+				mock.ISCSILibGetSessionsOK(fields.iscsiLib).Times(2)
+
+				mock.FilePathGlobCallPattern = "/sys/class/iscsi_host/host*/device/session%s"
+				mock.FilePathGlobOKReturn = []string{"device_path_1", "device_path_2"}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.SCSIGetDeviceWWNCallDevices = []string{"device_path_1", "device_path_2"}
+				mock.SCSIGetDeviceWWNOKReturn = "wwn_12345"
+				mock.SCSIGetDeviceWWNOK(fields.scsi)
+
+				mock.SCSIWaitUdevSymlinkCallDevice = "ppath_device_12345"
+				mock.SCSIWaitUdevSymlinkCallWWN = "wwn_12345"
+				mock.SCSIWaitUdevSymlinkCallDevice = ""
+				mock.SCSIGetDeviceWWNOK(fields.scsi)
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "WWN not found, but devices are present",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				mock.ISCSILibGetSessionsOKReturn = validLibISCSISessions
+				mock.ISCSILibGetSessionsOK(fields.iscsiLib).Times(2)
+
+				mock.FilePathGlobCallPattern = "/sys/class/iscsi_host/host*/device/session%s"
+				mock.FilePathGlobOKReturn = []string{"device_path_1", "device_path_2"}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.SCSIGetDeviceWWNCallDevices = []string{"device_path_1", "device_path_2"}
+				mock.SCSIGetDeviceWWNOKReturn = ""
+				mock.SCSIGetDeviceWWNOK(fields.scsi)
+
+				mock.SCSIWaitUdevSymlinkCallWWN = ""
+				mock.SCSIWaitUdevSymlinkCallDevice = mockhelper.ValidDMName
+				mock.SCSIWaitUdevSymlinkOK(fields.scsi)
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ISCSIConnector{
+				baseConnector:                          tt.fields.baseConnector,
+				multipath:                              tt.fields.multipath,
+				powerpath:                              tt.fields.powerpath,
+				scsi:                                   tt.fields.scsi,
+				iscsiLib:                               tt.fields.iscsiLib,
+				manualSessionManagement:                tt.fields.manualSessionManagement,
+				waitDeviceTimeout:                      tt.fields.waitDeviceTimeout,
+				waitDeviceRegisterTimeout:              tt.fields.waitDeviceRegisterTimeout,
+				failedSessionMinimumLoginRetryInterval: tt.fields.failedSessionMinimumLoginRetryInterval,
+				loginLock:                              tt.fields.loginLock,
+				limiter:                                tt.fields.limiter,
+				singleCall:                             tt.fields.singleCall,
+				filePath:                               tt.fields.filePath,
+			}
+			tt.stateSetter(tt.fields)
+			if _, err := c.connectPowerpathDevice(tt.args.ctx, tt.args.sessions, tt.args.info); (err != nil) != tt.wantErr {
+				t.Errorf("connectPowerpathDevice() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

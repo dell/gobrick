@@ -151,6 +151,62 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 			want:    Device{},
 			wantErr: true,
 		},
+		{
+			name:        "Invalid volume wwn",
+			fields:      getDefaultNVMEFields(ctrl),
+			stateSetter: func(_ NVMEFields) {},
+			args: args{
+				ctx: ctx,
+				info: NVMeVolumeInfo{
+					Targets: []NVMeTargetInfo{
+						{Portal: "test-portal", Target: "test-target"},
+					},
+					WWN: "",
+				},
+				useFc: false,
+			},
+			want:    Device{},
+			wantErr: true,
+		},
+		{
+			name:   "IsDaemonRunning true and Failed to connect volume",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				// fields.nvmeLib.EXPECT().GetNVMeDeviceData(gomock.Any()).Return("", "", nil).AnyTimes()
+			},
+			args: args{
+				ctx: ctx,
+				info: NVMeVolumeInfo{
+					Targets: []NVMeTargetInfo{
+						{Portal: "test-portal", Target: "test-target"},
+					},
+					WWN: validNQN,
+				},
+				useFc: false,
+			},
+			want:    Device{},
+			wantErr: true,
+		},
+		{
+			name:   "IsDaemonRunning false and Failed to connect volume",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+			},
+			args: args{
+				ctx: ctx,
+				info: NVMeVolumeInfo{
+					Targets: []NVMeTargetInfo{
+						{Portal: "test-portal", Target: "test-target"},
+					},
+					WWN: validNQN,
+				},
+				useFc: false,
+			},
+			want:    Device{},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -167,6 +223,7 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 				singleCall:                tt.fields.singleCall,
 				filePath:                  tt.fields.filePath,
 			}
+
 			tt.stateSetter(tt.fields)
 			got, err := c.ConnectVolume(tt.args.ctx, tt.args.info, tt.args.useFc)
 			if (err != nil) != tt.wantErr {

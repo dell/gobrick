@@ -151,6 +151,20 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 			want:    Device{},
 			wantErr: true,
 		},
+		// {
+		// 	name:        "Incorrect targets",
+		// 	fields:      getDefaultNVMEFields(ctrl),
+		// 	stateSetter: func(_ NVMEFields) {},
+		// 	args: args{
+		// 		ctx: ctx,
+		// 		info: NVMeVolumeInfo{
+		// 			Targets: []NVMeTargetInfo{
+		// 				{Portal: "", Target: ""},
+		// 			},
+		// 		},
+		// 		useFc: false,
+		// 	},
+		// },
 		{
 			name:        "Invalid volume wwn",
 			fields:      getDefaultNVMEFields(ctrl),

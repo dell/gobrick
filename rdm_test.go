@@ -35,13 +35,6 @@ func TestConnectRDMVolume(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mock := baseMockHelper{
-		MockHelper: mh.MockHelper{
-			Ctrl: ctrl,
-		},
-		Ctx: gomock.Any(),
-	}
-
 	tests := []struct {
 		name        string
 		fields      fcFields
@@ -88,12 +81,9 @@ func TestConnectRDMVolume(t *testing.T) {
 			name:   "Trying to connect",
 			fields: getDefaultFCFields(ctrl),
 			stateSetter: func(fields fcFields) {
-				getFCHBASInfoMock(&mock, fields.os, fields.filePath)
-				waitForDeviceWWNMock(&mock, fields.filePath, fields.os, fields.scsi)
-				mock.SCSIGetDevicesByWWNCallWWN = mh.ValidWWID
-				mock.SCSIGetDevicesByWWNOKReturn = mh.ValidDevices
-				mock.SCSIGetDevicesByWWNOK(fields.scsi)
-				BaserConnectorDisconnectDevicesByDeviceNameMock(&mock, fields.scsi)
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{mh.ValidDeviceName}, nil).AnyTimes()
+				fields.scsi.EXPECT().WaitUdevSymlink(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().CheckDeviceIsValid(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 			},
 			args: args{
 				ctx: context.Background(),
@@ -108,10 +98,10 @@ func TestConnectRDMVolume(t *testing.T) {
 				},
 			},
 			want: Device{
-				WWN:  mh.ValidWWID,
+				WWN:  "3" + mh.ValidWWID,
 				Name: mh.ValidDeviceName,
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 
@@ -127,6 +117,7 @@ func TestConnectRDMVolume(t *testing.T) {
 				limiter:                   tt.fields.limiter,
 				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
 			}
+
 			tt.stateSetter(tt.fields)
 			got, err := fc.ConnectRDMVolume(tt.args.ctx, tt.args.info)
 			if (err != nil) != tt.wantErr {

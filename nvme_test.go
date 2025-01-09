@@ -121,8 +121,9 @@ func getDefaultNVMEFields(ctrl *gomock.Controller) NVMEFields {
 
 func TestNVME_Connector_ConnectVolume(t *testing.T) {
 	type args struct {
-		ctx  context.Context
-		info NVMeVolumeInfo
+		ctx   context.Context
+		info  NVMeVolumeInfo
+		useFc bool
 	}
 
 	ctx := context.Background()
@@ -137,16 +138,18 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 		stateSetter func(fields NVMEFields)
 		want        Device
 		wantErr     bool
-		isFC        bool
 	}{
 		{
-			name:        "empty request",
+			name:        "Without any targets",
 			fields:      getDefaultNVMEFields(ctrl),
 			stateSetter: func(_ NVMEFields) {},
-			args:        args{ctx: ctx, info: NVMeVolumeInfo{}},
-			want:        Device{},
-			wantErr:     true,
-			isFC:        false,
+			args: args{
+				ctx:   ctx,
+				info:  NVMeVolumeInfo{},
+				useFc: false,
+			},
+			want:    Device{},
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -165,7 +168,7 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 				filePath:                  tt.fields.filePath,
 			}
 			tt.stateSetter(tt.fields)
-			got, err := c.ConnectVolume(tt.args.ctx, tt.args.info, tt.isFC)
+			got, err := c.ConnectVolume(tt.args.ctx, tt.args.info, tt.args.useFc)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ConnectVolume() error = %v, wantErr %v", err, tt.wantErr)
 				return

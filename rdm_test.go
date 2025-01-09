@@ -19,6 +19,7 @@ package gobrick
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -78,7 +79,59 @@ func TestConnectRDMVolume(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:   "Trying to connect",
+			name:   "No device found",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("No device found")).AnyTimes()
+				fields.scsi.EXPECT().WaitUdevSymlink(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().CheckDeviceIsValid(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+			},
+			args: args{
+				ctx: context.Background(),
+				info: RDMVolumeInfo{
+					Targets: []FCTargetInfo{
+						{
+							WWPN: "",
+						},
+					},
+					Lun: 0,
+					WWN: mh.ValidWWID,
+				},
+			},
+			want:    Device{},
+			wantErr: true,
+		},
+		{
+			name:   "Device is invalid",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{mh.ValidDeviceName}, nil).AnyTimes()
+				fields.scsi.EXPECT().WaitUdevSymlink(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().CheckDeviceIsValid(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return(mh.ValidDeviceName, nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args: args{
+				ctx: context.Background(),
+				info: RDMVolumeInfo{
+					Targets: []FCTargetInfo{
+						{
+							WWPN: "",
+						},
+					},
+					Lun: 0,
+					WWN: mh.ValidWWID,
+				},
+			},
+			want:    Device{},
+			wantErr: true,
+		},
+		{
+			name:   "Successfully connected",
 			fields: getDefaultFCFields(ctrl),
 			stateSetter: func(fields fcFields) {
 				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{mh.ValidDeviceName}, nil).AnyTimes()

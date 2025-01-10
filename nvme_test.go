@@ -487,7 +487,7 @@ func TestNVME_wwnMatches(t *testing.T) {
 	}
 }
 
-func TestTryNVMeConnect(t *testing.T) {
+func TestNVME_Connector_tryNVMeConnect(t *testing.T) {
 	type args struct {
 		ctx   context.Context
 		info  NVMeVolumeInfo
@@ -499,87 +499,61 @@ func TestTryNVMeConnect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	sysPath := fmt.Sprintf("/sys/class/fc_host/host*")
-	dm1Path := sysPath + "1"
-	sysPath1Glob := sysPath + "*"
-
-	mock := mh.MockHelper{
-		Ctrl: ctrl,
-	}
-
 	tests := []struct {
 		name        string
 		fields      NVMEFields
-		args        args
 		stateSetter func(fields NVMEFields)
+		args        args
 		wantErr     bool
 	}{
 		{
-			name:   "successful connection with FC",
+			name:        "Without FC",
+			fields:      getDefaultNVMEFields(ctrl),
+			stateSetter: func(_ NVMEFields) {},
+			args: args{
+				ctx:   ctx,
+				info:  NVMeVolumeInfo{},
+				useFC: false,
+			},
+			wantErr: false,
+		},
+		{
+			name:   "connection with FC - Error in reading file",
 			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, errors.New("error in matching files with pattern")).AnyTimes()
+			},
 			args: args{
 				ctx: ctx,
 				info: NVMeVolumeInfo{
 					Targets: []NVMeTargetInfo{
 						{Portal: "192.168.0.1", Target: "nqn-1"},
 					},
+					WWN: "",
 				},
 				useFC: true,
 			},
+			wantErr: true,
+		},
+		{
+			name:   "connection with FC",
+			fields: getDefaultNVMEFields(ctrl),
 			stateSetter: func(fields NVMEFields) {
-				mock.FilePathGlobOKReturn = []string{dm1Path}
-				mock.FilePathGlobCallPattern = sysPath1Glob
-				mock.FilePathGlobOK(fields.filePath)
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil).AnyTimes()
+			},
+			args: args{
+				ctx: ctx,
+				info: NVMeVolumeInfo{
+					Targets: []NVMeTargetInfo{
+						{Portal: "192.168.0.1", Target: "nqn-1"},
+					},
+					WWN: "",
+				},
+				useFC: true,
 			},
 			wantErr: false,
 		},
-		// {
-		// 	name:   "error gathering FC hosts",
-		// 	fields: getDefaultNVMEFields(ctrl),
-		// 	args: args{
-		// 		ctx: ctx,
-		// 		info: NVMeVolumeInfo{
-		// 			Targets: []NVMeTargetInfo{
-		// 				{Portal: "192.168.0.1", Target: "nqn-1"},
-		// 			},
-		// 		},
-		// 		useFC: true,
-		// 	},
-		// 	stateSetter: func(_ NVMEFields) {},
-		// 	wantErr:     true,
-		// },
-		// {
-		// 	name:   "successful connection but failed NVMeFCConnect",
-		// 	fields: getDefaultNVMEFields(ctrl),
-		// 	args: args{
-		// 		ctx: ctx,
-		// 		info: NVMeVolumeInfo{
-		// 			Targets: []NVMeTargetInfo{
-		// 				{Portal: "192.168.0.1", Target: "nqn-1"},
-		// 			},
-		// 		},
-		// 		useFC: true,
-		// 	},
-		// 	stateSetter: func(_ NVMEFields) {},
-		// 	wantErr:     false,
-		// },
-		// {
-		// 	name:   "no FC, no connection attempt",
-		// 	fields: getDefaultNVMEFields(ctrl),
-		// 	args: args{
-		// 		ctx: ctx,
-		// 		info: NVMeVolumeInfo{
-		// 			Targets: []NVMeTargetInfo{
-		// 				{Portal: "192.168.0.1", Target: "nqn-1"},
-		// 			},
-		// 		},
-		// 		useFC: false,
-		// 	},
-		// 	stateSetter: func(_ NVMEFields) {},
-		// 	wantErr:     false,
-		// },
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &NVMeConnector{
@@ -597,8 +571,6 @@ func TestTryNVMeConnect(t *testing.T) {
 			}
 
 			tt.stateSetter(tt.fields)
-
-			// Run the test
 			err := c.tryNVMeConnect(tt.args.ctx, tt.args.info, tt.args.useFC)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("tryNVMeConnect() error = %v, wantErr %v", err, tt.wantErr)

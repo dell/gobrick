@@ -17,6 +17,7 @@ package gobrick
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -296,6 +297,108 @@ func TestNVME_Connector_DisconnectVolume(t *testing.T) {
 			err := c.DisconnectVolume(tt.args.ctx, tt.args.info)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DisconnectVolume() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestNVME_Connector_DisconnectVolumeByDeviceName(t *testing.T) {
+	type args struct {
+		ctx  context.Context
+		name string
+	}
+
+	ctx := context.Background()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      NVMEFields
+		args        args
+		stateSetter func(fields NVMEFields)
+		wantErr     bool
+	}{
+		{
+			name:   "empty request",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+			},
+			args:    args{ctx: ctx, name: ""},
+			wantErr: false,
+		},
+		{
+			name:   "Disconnect with device mapper name",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{mh.ValidDeviceName}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    args{ctx: ctx, name: mh.ValidDMName},
+			wantErr: false,
+		},
+		{
+			name:   "Disconnect with device mapper name AND failed to get children for DM",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to get children for DM")).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{mh.ValidDeviceName}, nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    args{ctx: ctx, name: mh.ValidDMName},
+			wantErr: false,
+		},
+		{
+			name:   "Disconnect with device name",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{mh.ValidDeviceName}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    args{ctx: ctx, name: mh.ValidDeviceName},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &NVMeConnector{
+				baseConnector:             tt.fields.baseConnector,
+				multipath:                 tt.fields.multipath,
+				scsi:                      tt.fields.scsi,
+				nvmeLib:                   tt.fields.nvmeLib,
+				manualSessionManagement:   tt.fields.manualSessionManagement,
+				waitDeviceTimeout:         tt.fields.waitDeviceTimeout,
+				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
+				loginLock:                 tt.fields.loginLock,
+				limiter:                   tt.fields.limiter,
+				singleCall:                tt.fields.singleCall,
+				filePath:                  tt.fields.filePath,
+			}
+
+			tt.stateSetter(tt.fields)
+			err := c.DisconnectVolumeByDeviceName(tt.args.ctx, tt.args.name)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DisconnectVolumeByDeviceName() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

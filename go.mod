@@ -1,10 +1,9 @@
 module github.com/dell/gobrick
 
 go 1.23
-
 require (
-	github.com/dell/goiscsi v1.10.0
-	github.com/dell/gonvme v1.9.0
+	github.com/dell/goiscsi v1.11.0
+	github.com/dell/gonvme v1.10.1
 	github.com/golang/mock v1.6.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0

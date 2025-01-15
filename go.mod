@@ -1,6 +1,9 @@
 module github.com/dell/gobrick
 
-go 1.23
+go 1.23.0
+
+toolchain go1.23.4
+
 require (
 	github.com/dell/goiscsi v1.11.0
 	github.com/dell/gonvme v1.10.1

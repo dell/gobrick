@@ -1,5 +1,5 @@
 /*
-Copyright © 2020-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+Copyright © 2020-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package gobrick
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -789,6 +790,76 @@ func TestISCSIConnector_connectPowerpathDevice(t *testing.T) {
 			tt.stateSetter(tt.fields)
 			if _, err := c.connectPowerpathDevice(tt.args.ctx, tt.args.sessions, tt.args.info); (err != nil) != tt.wantErr {
 				t.Errorf("connectPowerpathDevice() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestISCSIConnector_tryEnableManualISCSISessionMGMT(t *testing.T) {
+	type args struct {
+		ctx    context.Context
+		target ISCSITargetInfo
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	target := ISCSITargetInfo{
+		Portal: validISCSIPortal1,
+		Target: validISCSITarget1,
+	}
+	defaultArgs := args{ctx: ctx, target: target}
+
+	tests := []struct {
+		name        string
+		fields      iscsiFields
+		args        args
+		stateSetter func(fields iscsiFields)
+		wantErr     bool
+	}{
+		{
+			name:   "CreateOrUpdateNode not returning any error",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "CreateOrUpdateNode not returning error",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(errors.New("generic error")).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ISCSIConnector{
+				baseConnector:                          tt.fields.baseConnector,
+				multipath:                              tt.fields.multipath,
+				powerpath:                              tt.fields.powerpath,
+				scsi:                                   tt.fields.scsi,
+				iscsiLib:                               tt.fields.iscsiLib,
+				manualSessionManagement:                tt.fields.manualSessionManagement,
+				waitDeviceTimeout:                      tt.fields.waitDeviceTimeout,
+				waitDeviceRegisterTimeout:              tt.fields.waitDeviceRegisterTimeout,
+				failedSessionMinimumLoginRetryInterval: tt.fields.failedSessionMinimumLoginRetryInterval,
+				loginLock:                              tt.fields.loginLock,
+				limiter:                                tt.fields.limiter,
+				singleCall:                             tt.fields.singleCall,
+				filePath:                               tt.fields.filePath,
+				chapEnabled:                            true,
+				chapUser:                               "user",
+				chapPassword:                           "password",
+			}
+			tt.stateSetter(tt.fields)
+			if err := c.tryEnableManualISCSISessionMGMT(tt.args.ctx, tt.args.target); (err != nil) != tt.wantErr {
+				t.Errorf("tryEnableManualISCSISessionMGMT() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

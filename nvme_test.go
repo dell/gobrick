@@ -578,3 +578,45 @@ func TestNVME_Connector_tryNVMeConnect(t *testing.T) {
 		})
 	}
 }
+
+func TestNVME_readNVMeDevicesFromResultCH(t *testing.T) {
+	tests := []struct {
+		name             string
+		devicePathResult DevicePathResult
+		expectedPaths    []string
+		expectedNguid    string
+	}{
+		{
+			name: "Single device path",
+			devicePathResult: DevicePathResult{
+				devicePaths: []string{"/dev/nvme0n1"},
+				nguid:       "test-nguid-1",
+			},
+			expectedPaths: []string{"nvme0n1"},
+			expectedNguid: "test-nguid-1",
+		},
+		{
+			name: "Multiple device paths",
+			devicePathResult: DevicePathResult{
+				devicePaths: []string{"/dev/nvme0n1", "/dev/nvme1n1"},
+				nguid:       "test-nguid-2",
+			},
+			expectedPaths: []string{"nvme0n1", "nvme1n1"},
+			expectedNguid: "test-nguid-2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ch := make(chan DevicePathResult, 1)
+			ch <- tt.devicePathResult
+			gotPaths, gotNguid := readNVMeDevicesFromResultCH(ch, nil)
+			if !reflect.DeepEqual(gotPaths, tt.expectedPaths) {
+				t.Errorf("readNVMeDevicesFromResultCH() gotPaths = %v, expectedPaths %v", gotPaths, tt.expectedPaths)
+			}
+			if gotNguid != tt.expectedNguid {
+				t.Errorf("readNVMeDevicesFromResultCH() gotNguid = %v, expectedNguid %v", gotNguid, tt.expectedNguid)
+			}
+		})
+	}
+}

@@ -633,10 +633,6 @@ func TestISCSIConnector_DisconnectVolumeByDeviceName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mock := baseMockHelper{
-		Ctx: gomock.Any(),
-	}
-
 	tests := []struct {
 		name        string
 		fields      iscsiFields
@@ -645,10 +641,40 @@ func TestISCSIConnector_DisconnectVolumeByDeviceName(t *testing.T) {
 		wantErr     bool
 	}{
 		{
-			name:   "ok",
+			name:   "failed to read WWN for DM",
 			fields: getDefaultISCSIFields(ctrl),
 			stateSetter: func(fields iscsiFields) {
-				BaserConnectorDisconnectDevicesByDeviceNameMock(&mock, fields.scsi)
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return("", errors.New("failed to read WWN for DM")).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "failed to get children for DM AND failed to resolve DM",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to get children for DM")).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", errors.New("failed to resolve DM")).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "failed to get children for DM",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to get children for DM")).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			},
 			args:    defaultArgs,
 			wantErr: false,
@@ -691,19 +717,11 @@ func TestISCSIConnector_connectPowerpathDevice(t *testing.T) {
 	validISCSIVolumeInfoEmptyTarget := ISCSIVolumeInfo{
 		Targets: []ISCSITargetInfo{},
 	}
-	// defaultArgs := args{
-	// 	ctx:      ctx,
-	// 	sessions: validLibISCSISessions,
-	// 	info:     validISCSIVolumeInfo,
-	// }
+
 	emptyTargetArgs := args{ctx: ctx, info: validISCSIVolumeInfoEmptyTarget}
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	// mock := baseMockHelper{
-	// 	Ctx: ctx,
-	// }
 
 	tests := []struct {
 		name        string

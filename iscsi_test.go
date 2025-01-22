@@ -733,7 +733,7 @@ func TestISCSIConnector_connectPowerpathDevice(t *testing.T) {
 		{
 			name:        "discovery complete but devices not found",
 			fields:      getDefaultISCSIFields(ctrl),
-			stateSetter: func(fields iscsiFields) {},
+			stateSetter: func(_ iscsiFields) {},
 			args:        emptyTargetArgs,
 			wantErr:     true,
 		},

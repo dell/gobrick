@@ -87,6 +87,7 @@ type NVMEFields struct {
 	scsi                                   *intscsi.MockSCSI
 	nvmeLib                                *gonvme.MockNVMe
 	filePath                               *wrp.MockLimitedFilepath
+	os                                     *wrp.MockLimitedOS
 	manualSessionManagement                bool
 	waitDeviceTimeout                      time.Duration
 	waitDeviceRegisterTimeout              time.Duration
@@ -117,6 +118,7 @@ func getDefaultNVMEFields(ctrl *gomock.Controller) NVMEFields {
 		loginLock:                              con.loginLock,
 		limiter:                                con.limiter,
 		singleCall:                             con.singleCall,
+		os:                                     wrp.NewMockLimitedOS(ctrl),
 	}
 }
 
@@ -616,6 +618,79 @@ func TestNVME_readNVMeDevicesFromResultCH(t *testing.T) {
 			}
 			if gotNguid != tt.expectedNguid {
 				t.Errorf("readNVMeDevicesFromResultCH() gotNguid = %v, expectedNguid %v", gotNguid, tt.expectedNguid)
+			}
+		})
+	}
+}
+
+func TestNVME_Connector_getFCHostInfo(t *testing.T) {
+	type args struct {
+		ctx context.Context
+	}
+
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      NVMEFields
+		args        args
+		stateSetter func(fields NVMEFields)
+		want        []FCHBAInfo
+		wantErr     bool
+	}{
+		{
+			name:   "Successfully retrieve FC host info",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.filePath.EXPECT().Glob("/sys/class/fc_host/host*").Return([]string{
+					"/sys/class/fc_host/host0",
+				}, nil)
+				fields.os.EXPECT().ReadFile("/sys/class/fc_host/host0/port_name").Return([]byte("tcp"), nil)
+				fields.os.EXPECT().ReadFile("/sys/class/fc_host/host0/node_name").Return([]byte("nqn-1"), nil)
+			},
+			args: args{ctx: ctx},
+			want: []FCHBAInfo{
+				{PortName: "tcp", NodeName: "nqn-1"},
+			},
+			wantErr: false,
+		},
+		{
+			name:   "Error globbing FC hosts",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.filePath.EXPECT().Glob("/sys/class/fc_host/host*").Return(nil, errors.New("glob error"))
+			},
+			args:    args{ctx: ctx},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &NVMeConnector{
+				baseConnector:             tt.fields.baseConnector,
+				multipath:                 tt.fields.multipath,
+				scsi:                      tt.fields.scsi,
+				nvmeLib:                   tt.fields.nvmeLib,
+				filePath:                  tt.fields.filePath,
+				os:                        tt.fields.os,
+				manualSessionManagement:   tt.fields.manualSessionManagement,
+				waitDeviceTimeout:         tt.fields.waitDeviceTimeout,
+				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
+				loginLock:                 tt.fields.loginLock,
+				limiter:                   tt.fields.limiter,
+				singleCall:                tt.fields.singleCall,
+			}
+			tt.stateSetter(tt.fields)
+			got, err := c.getFCHostInfo(tt.args.ctx)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getFCHostInfo() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getFCHostInfo() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

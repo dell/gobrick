@@ -666,6 +666,33 @@ func TestNVME_Connector_getFCHostInfo(t *testing.T) {
 			want:    nil,
 			wantErr: true,
 		},
+		{
+			name:   "Error reading port_name",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.filePath.EXPECT().Glob("/sys/class/fc_host/host*").Return([]string{
+					"/sys/class/fc_host/host0",
+				}, nil)
+				fields.os.EXPECT().ReadFile("/sys/class/fc_host/host0/port_name").Return(nil, errors.New("read port error"))
+			},
+			args:    args{ctx: ctx},
+			want:    nil,
+			wantErr: false,
+		},
+		{
+			name:   "Error reading node_name",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.filePath.EXPECT().Glob("/sys/class/fc_host/host*").Return([]string{
+					"/sys/class/fc_host/host0",
+				}, nil)
+				fields.os.EXPECT().ReadFile("/sys/class/fc_host/host0/port_name").Return([]byte("tcp"), nil)
+				fields.os.EXPECT().ReadFile("/sys/class/fc_host/host0/node_name").Return(nil, errors.New("read node error"))
+			},
+			args:    args{ctx: ctx},
+			want:    nil,
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

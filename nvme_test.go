@@ -280,8 +280,6 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 				fields.scsi.EXPECT().CheckDeviceIsValid(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
 				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("multipath device not found")).AnyTimes()
 				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(errors.New("can not delete block device")).AnyTimes()
-				// fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-				// fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			},
 			args: args{
 				ctx: ctx,
@@ -684,6 +682,26 @@ func TestNVME_Connector_tryNVMeConnect(t *testing.T) {
 			fields: getDefaultNVMEFields(ctrl),
 			stateSetter: func(fields NVMEFields) {
 				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil).AnyTimes()
+			},
+			args: args{
+				ctx: ctx,
+				info: NVMeVolumeInfo{
+					Targets: []NVMeTargetInfo{
+						{Portal: "192.168.0.1", Target: "nqn-1"},
+					},
+					WWN: "",
+				},
+				useFC: true,
+			},
+			wantErr: false,
+		},
+		{
+			name:   "connection with FC - multiple FCHostsInfo",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"host"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("testName"), nil).AnyTimes()
+				fields.nvmeLib.EXPECT().NVMeFCConnect(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			},
 			args: args{
 				ctx: ctx,

@@ -680,10 +680,30 @@ func TestNVME_Connector_tryNVMeConnect(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:   "connection with FC",
+			name:   "connection with FC - No fc host matches",
 			fields: getDefaultNVMEFields(ctrl),
 			stateSetter: func(fields NVMEFields) {
 				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil).AnyTimes()
+			},
+			args: args{
+				ctx: ctx,
+				info: NVMeVolumeInfo{
+					Targets: []NVMeTargetInfo{
+						{Portal: "192.168.0.1", Target: "nqn-1"},
+					},
+					WWN: "",
+				},
+				useFC: true,
+			},
+			wantErr: false,
+		},
+		{
+			name:   "connection with FC - multiple FCHostsInfo AND Couldn't connect to NVMeFC target",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"host"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("testName"), nil).AnyTimes()
+				fields.nvmeLib.EXPECT().NVMeFCConnect(gomock.Any(), gomock.Any()).Return(errors.New("Couldn't connect to NVMeFC target")).AnyTimes()
 			},
 			args: args{
 				ctx: ctx,
@@ -712,6 +732,7 @@ func TestNVME_Connector_tryNVMeConnect(t *testing.T) {
 				limiter:                   tt.fields.limiter,
 				singleCall:                tt.fields.singleCall,
 				filePath:                  tt.fields.filePath,
+				os:                        tt.fields.os,
 			}
 
 			tt.stateSetter(tt.fields)

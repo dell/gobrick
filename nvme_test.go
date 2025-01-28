@@ -1,5 +1,5 @@
 /*
-Copyright © 2020-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+Copyright © 2020-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -267,6 +267,54 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name:   "nvme session found and Device is not valid",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				fields.nvmeLib.EXPECT().GetSessions().Return(validLibNVMESessions, nil).AnyTimes()
+				fields.nvmeLib.EXPECT().ListNVMeDeviceAndNamespace().Return(validDevicePathsAndNamespacesWithTwoDevices, nil).AnyTimes()
+				fields.nvmeLib.EXPECT().GetNVMeDeviceData(gomock.Any()).Return("0f8da909812540628ccf09680039914f", "ns1", nil).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("naa.68ccf098000f8da9098125406239914f", nil).AnyTimes()
+				fields.scsi.EXPECT().WaitUdevSymlinkNVMe(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().CheckDeviceIsValid(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("multipath device not found")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(errors.New("can not delete block device")).AnyTimes()
+				// fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				// fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args: args{
+				ctx: ctx,
+				info: NVMeVolumeInfo{
+					Targets: []NVMeTargetInfo{validNVMETargetInfo1},
+					WWN:     "naa.68ccf098000f8da9098125406239914f",
+				},
+				useFc: false,
+			},
+			want:    Device{},
+			wantErr: true,
+		},
+		// {
+		// 	name:   "IsDaemonRunning true and Failed to connect volume",
+		// 	fields: getDefaultNVMEFields(ctrl),
+		// 	stateSetter: func(fields NVMEFields) {
+		// 		fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+		// 		fields.nvmeLib.EXPECT().GetSessions().Return(nil, nil).AnyTimes()
+		// 		fields.nvmeLib.EXPECT().GetNVMeDeviceData(gomock.Any()).Return("", "", nil).AnyTimes()
+		// 	},
+		// 	args: args{
+		// 		ctx: ctx,
+		// 		info: NVMeVolumeInfo{
+		// 			Targets: []NVMeTargetInfo{
+		// 				{Portal: "test-portal", Target: "test-target"},
+		// 			},
+		// 			WWN: validNQN,
+		// 		},
+		// 		useFc: false,
+		// 	},
+		// 	want:    Device{},
+		// 	wantErr: true,
+		// },
 		{
 			name:   "IsDaemonRunning false and Failed to connect volume",
 			fields: getDefaultNVMEFields(ctrl),

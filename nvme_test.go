@@ -268,6 +268,31 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:   "nvme session found AND Couldn't find the nvme namespaces",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				fields.nvmeLib.EXPECT().GetSessions().Return(validLibNVMESessions, nil).AnyTimes()
+				fields.nvmeLib.EXPECT().ListNVMeDeviceAndNamespace().Return(validDevicePathsAndNamespacesWithTwoDevices, nil).AnyTimes()
+				fields.nvmeLib.EXPECT().GetNVMeDeviceData(gomock.Any()).Return("0f8da909812540628ccf09680039914f", "ns1", nil).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("naa.68ccf098000f8da9098125406239914f", errors.New("Couldn't find the nvme namespaces")).AnyTimes()
+				fields.scsi.EXPECT().WaitUdevSymlinkNVMe(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().CheckDeviceIsValid(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("multipath device not found")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(errors.New("can not delete block device")).AnyTimes()
+			},
+			args: args{
+				ctx: ctx,
+				info: NVMeVolumeInfo{
+					Targets: []NVMeTargetInfo{validNVMETargetInfo1},
+					WWN:     "naa.68ccf098000f8da9098125406239914f",
+				},
+				useFc: false,
+			},
+			want:    Device{},
+			wantErr: true,
+		},
+		{
 			name:   "nvme session found and Device is not valid",
 			fields: getDefaultNVMEFields(ctrl),
 			stateSetter: func(fields NVMEFields) {
@@ -292,29 +317,8 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 			want:    Device{},
 			wantErr: true,
 		},
-		// {
-		// 	name:   "IsDaemonRunning true and Failed to connect volume",
-		// 	fields: getDefaultNVMEFields(ctrl),
-		// 	stateSetter: func(fields NVMEFields) {
-		// 		fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
-		// 		fields.nvmeLib.EXPECT().GetSessions().Return(nil, nil).AnyTimes()
-		// 		fields.nvmeLib.EXPECT().GetNVMeDeviceData(gomock.Any()).Return("", "", nil).AnyTimes()
-		// 	},
-		// 	args: args{
-		// 		ctx: ctx,
-		// 		info: NVMeVolumeInfo{
-		// 			Targets: []NVMeTargetInfo{
-		// 				{Portal: "test-portal", Target: "test-target"},
-		// 			},
-		// 			WWN: validNQN,
-		// 		},
-		// 		useFc: false,
-		// 	},
-		// 	want:    Device{},
-		// 	wantErr: true,
-		// },
 		{
-			name:   "IsDaemonRunning false and Failed to connect volume",
+			name:   "multipath IsDaemonRunning false and Failed to connect volume",
 			fields: getDefaultNVMEFields(ctrl),
 			stateSetter: func(fields NVMEFields) {
 				fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
@@ -336,7 +340,7 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:   "IsDaemonRunning false and able to connect volume",
+			name:   "multipath IsDaemonRunning false and able to connect volume",
 			fields: getDefaultNVMEFields(ctrl),
 			stateSetter: func(fields NVMEFields) {
 				fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
@@ -413,6 +417,15 @@ func TestNVME_Connector_DisconnectVolume(t *testing.T) {
 			stateSetter: func(fields NVMEFields) {
 				fields.nvmeLib.EXPECT().ListNVMeDeviceAndNamespace().Return(validDevicePathsAndNamespacesWithTwoDevices, nil).AnyTimes()
 				fields.nvmeLib.EXPECT().GetNVMeDeviceData(gomock.Any()).Return("0f8da909812540628ccf09680039914f", "ns1", nil).AnyTimes()
+			},
+			args:    args{ctx: ctx, info: NVMeVolumeInfo{}},
+			wantErr: false,
+		},
+		{
+			name:   "Error in finding the nvme namespaces",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.nvmeLib.EXPECT().ListNVMeDeviceAndNamespace().Return([]gonvme.DevicePathAndNamespace{}, errors.New("Couldn't find the nvme namespaces")).AnyTimes()
 			},
 			args:    args{ctx: ctx, info: NVMeVolumeInfo{}},
 			wantErr: false,
@@ -568,6 +581,16 @@ func TestNVME_Connector_GetInitiatorName(t *testing.T) {
 			fields: getDefaultNVMEFields(ctrl),
 			stateSetter: func(fields NVMEFields) {
 				fields.nvmeLib.EXPECT().GetInitiators(gomock.Any()).Return([]string{"nqn.1988-11.com.dell.mock:01:0000000000000"}, nil)
+			},
+			args:    args{ctx: ctx, info: NVMeVolumeInfo{}},
+			want:    []string{"nqn.1988-11.com.dell.mock:01:0000000000000"},
+			wantErr: false,
+		},
+		{
+			name:   "failed to read initiator name",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.nvmeLib.EXPECT().GetInitiators(gomock.Any()).Return([]string{"nqn.1988-11.com.dell.mock:01:0000000000000"}, errors.New("failed to read initiator name"))
 			},
 			args:    args{ctx: ctx, info: NVMeVolumeInfo{}},
 			want:    []string{"nqn.1988-11.com.dell.mock:01:0000000000000"},

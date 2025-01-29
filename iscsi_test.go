@@ -376,28 +376,6 @@ func TestISCSIConnector_ConnectVolume(t *testing.T) {
 			},
 			wantErr: false,
 		},
-		// {
-		// 	name:   "Without any targets",
-		// 	fields: getDefaultISCSIFields(ctrl),
-		// 	stateSetter: func(fields iscsiFields) {
-		// 		iscsiSessionSetup(fields)
-		// 		mock.MultipathIsDaemonRunningOKReturn = false
-		// 		mock.MultipathIsDaemonRunningOK(fields.multipath)
-		// 		deviceDiscovery(fields)
-		// 		singleConnect(fields)
-
-		// 		mock.SCSICheckDeviceIsValidCallDevice = mockhelper.ValidDevicePath2
-		// 		mock.SCSICheckDeviceIsValidOKReturn = true
-		// 		mock.SCSICheckDeviceIsValidOK(fields.scsi)
-
-		// 		fields.iscsiLib.EXPECT().PerformLogin(gomock.Any()).Return(nil).AnyTimes()
-		// 		fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-		// 		fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil).AnyTimes()
-		// 	},
-		// 	args:    emptyInfoArgs,
-		// 	want:    Device{},
-		// 	wantErr: true,
-		// },
 		{
 			name:   "invalid device",
 			fields: getDefaultISCSIFields(ctrl),

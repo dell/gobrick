@@ -516,6 +516,27 @@ func TestNVME_Connector_DisconnectVolumeByDeviceName(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:   "Disconnect with device name AND can't find wwn for device",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), gomock.Any()).Return("", errors.New("can't find wwn for device")).AnyTimes()
+			},
+			args:    args{ctx: ctx, name: mh.ValidDeviceName},
+			wantErr: true,
+		},
+		{
+			name:   "Disconnect with device name AND failed to find devices by wwn",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to find devices by wwn")).AnyTimes()
+			},
+			args:    args{ctx: ctx, name: mh.ValidDeviceName},
+			wantErr: true,
+		},
+		{
 			name:   "Disconnect with device name",
 			fields: getDefaultNVMEFields(ctrl),
 			stateSetter: func(fields NVMEFields) {

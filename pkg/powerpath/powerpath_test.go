@@ -329,6 +329,14 @@ func Test_powerpath_runCommand(t *testing.T) {
 			want:    []byte(validResp),
 			wantErr: false,
 		},
+		{
+			name:        "invalid command",
+			fields:      chrootFields,
+			stateSetter: func(_ ppFields) {},
+			args:        args{ctx: ctx, command: "ls | cd", args: testArgs},
+			want:        []byte(nil),
+			wantErr:     true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -400,6 +408,17 @@ func Test_powerpath_GetPowerPathDevices(t *testing.T) {
 				mocks.OSExecCmdErr(cmdMock)
 			},
 			args:    defaultArgs,
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:        "No devices",
+			fields:      getDefaultPPFields(ctrl),
+			stateSetter: func(_ ppFields) {},
+			args: args{
+				ctx:     ctx,
+				devices: []string{},
+			},
 			want:    "",
 			wantErr: true,
 		},

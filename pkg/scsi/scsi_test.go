@@ -20,6 +20,7 @@ package scsi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -60,6 +61,27 @@ func getDefaultSCSIFields(ctrl *gomock.Controller) scsiFields {
 		os:         osMock,
 		osexec:     osExecMock,
 		singleCall: &singleflight.Group{},
+	}
+}
+
+func TestDevicesHaveDifferentParentsErr_Error(t *testing.T) {
+	tests := []struct {
+		name string
+		err  *DevicesHaveDifferentParentsErr
+		want string
+	}{
+		{
+			name: "Test DevicesHaveDifferentParentsErr",
+			err:  &DevicesHaveDifferentParentsErr{},
+			want: "device have different parent DMs",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.err.Error(); got != tt.want {
+				t.Errorf("DevicesHaveDifferentParentsErr.Error() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -924,6 +946,112 @@ func Test_scsi_GetDMDeviceByChildren(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("GetDMDeviceByChildren() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetNVMEDMDeviceByChildren(t *testing.T) {
+	type args struct {
+		ctx     context.Context
+		devices []string
+	}
+
+	ctx := context.Background()
+
+	defaultArgs := args{
+		ctx:     ctx,
+		devices: []string{mh.ValidDeviceName, mh.ValidDeviceName2},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      scsiFields
+		stateSetter func(fields scsiFields)
+		args        args
+		want        string
+		wantErr     bool
+	}{
+		{
+			name:        "error - dm not found",
+			fields:      getDefaultSCSIFields(ctrl),
+			stateSetter: func(_ scsiFields) {},
+			args: args{
+				ctx:     ctx,
+				devices: []string{},
+			},
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:   "error while resolve glob",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, errors.New("glob error")).AnyTimes()
+			},
+			args:    defaultArgs,
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:   "Error in reading file",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"match1", "match2"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte{}, errors.New("read file error")).AnyTimes()
+			},
+			args:    defaultArgs,
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:   "Error - Devices Have Different Parents",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/fc_host/host0", "/sys/class/fc_host/host1"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("mpath"), nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:   "Success",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/fc_host/host0", "/sys/class/fc_host/host1"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("host0"), nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			want:    "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.stateSetter != nil {
+				tt.stateSetter(tt.fields)
+			}
+
+			s := &Scsi{
+				chroot:     tt.fields.chroot,
+				filePath:   tt.fields.filePath,
+				os:         tt.fields.os,
+				osexec:     tt.fields.osexec,
+				singleCall: tt.fields.singleCall,
+			}
+
+			got, err := s.GetNVMEDMDeviceByChildren(tt.args.ctx, tt.args.devices)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Scsi.GetNVMEDMDeviceByChildren() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("Scsi.GetNVMEDMDeviceByChildren() = %v, want %v", got, tt.want)
 			}
 		})
 	}

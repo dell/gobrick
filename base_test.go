@@ -1,5 +1,5 @@
 /*
-Copyright © 2020-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+Copyright © 2020-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -554,7 +554,6 @@ func TestDisconnectDevicesByDeviceName(t *testing.T) {
 				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true)
 				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, nil)
 				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return("", errors.New("failed to read WWN for DM"))
-				// fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, nil)
 			},
 			expectedErr: true,
 		},
@@ -588,6 +587,100 @@ func TestDisconnectDevicesByDeviceName(t *testing.T) {
 
 			if (err != nil) != test.expectedErr {
 				t.Errorf("disconnectDevicesByDeviceName() error = %v, wantErr %v", err, test.expectedErr)
+				return
+			}
+		})
+	}
+}
+
+func TestCleanNVMeDevices(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	type args struct {
+		ctx        context.Context
+		DeviceName string
+		Force      bool
+		Devices    []string
+		WWN        string
+	}
+
+	tests := []struct {
+		name        string
+		args        args
+		fields      BaseConnectorFields
+		stateSetter func(fields BaseConnectorFields)
+		expectedErr bool
+	}{
+		{
+			name: "Device not found",
+			args: args{
+				ctx:        context.Background(),
+				DeviceName: "non-existent-device",
+				Force:      false,
+				Devices:    []string{},
+				WWN:        "",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+			},
+			expectedErr: false,
+		},
+		{
+			name: "Flush multipath device",
+			args: args{
+				ctx:        context.Background(),
+				DeviceName: deviceMapperPrefix + "test-device",
+				Force:      false,
+				Devices:    []string{},
+				WWN:        "",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil)
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("failed to flush multipath device"))
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false)
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(errors.New("failed to remove wwid"))
+			},
+			expectedErr: false,
+		},
+		{
+			name: "Failed to flush multipath device",
+			args: args{
+				ctx:        context.Background(),
+				DeviceName: deviceMapperPrefix + "test-device",
+				Force:      false,
+				Devices:    []string{},
+				WWN:        "",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil)
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("failed to flush multipath device"))
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true)
+			},
+			expectedErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			bc := &baseConnector{
+				multipath:             test.fields.multipath,
+				powerpath:             test.fields.powerpath,
+				scsi:                  test.fields.scsi,
+				multipathFlushRetries: 1,
+			}
+
+			test.stateSetter(test.fields)
+
+			err := bc.cleanNVMeDevices(test.args.ctx, test.args.Force, test.args.Devices, test.args.WWN)
+
+			if (err != nil) != test.expectedErr {
+				t.Errorf("cleanNVMeDevices() error = %v, wantErr %v", err, test.expectedErr)
 				return
 			}
 		})

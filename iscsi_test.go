@@ -1,5 +1,5 @@
 /*
-Copyright © 2020-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+Copyright © 2020-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package gobrick
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -610,10 +611,6 @@ func TestISCSIConnector_DisconnectVolumeByDeviceName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mock := baseMockHelper{
-		Ctx: gomock.Any(),
-	}
-
 	tests := []struct {
 		name        string
 		fields      iscsiFields
@@ -622,10 +619,40 @@ func TestISCSIConnector_DisconnectVolumeByDeviceName(t *testing.T) {
 		wantErr     bool
 	}{
 		{
-			name:   "ok",
+			name:   "failed to read WWN for DM",
 			fields: getDefaultISCSIFields(ctrl),
 			stateSetter: func(fields iscsiFields) {
-				BaserConnectorDisconnectDevicesByDeviceNameMock(&mock, fields.scsi)
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return("", errors.New("failed to read WWN for DM")).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "failed to get children for DM AND failed to resolve DM",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to get children for DM")).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", errors.New("failed to resolve DM")).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "failed to get children for DM",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to get children for DM")).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			},
 			args:    defaultArgs,
 			wantErr: false,
@@ -651,6 +678,135 @@ func TestISCSIConnector_DisconnectVolumeByDeviceName(t *testing.T) {
 			tt.stateSetter(tt.fields)
 			if err := c.DisconnectVolumeByDeviceName(tt.args.ctx, tt.args.name); (err != nil) != tt.wantErr {
 				t.Errorf("DisconnectVolumeByDeviceName() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestISCSIConnector_connectPowerpathDevice(t *testing.T) {
+	type args struct {
+		ctx      context.Context
+		sessions []goiscsi.ISCSISession
+		info     ISCSIVolumeInfo
+	}
+
+	ctx := context.Background()
+
+	validISCSIVolumeInfoEmptyTarget := ISCSIVolumeInfo{
+		Targets: []ISCSITargetInfo{},
+	}
+
+	emptyTargetArgs := args{ctx: ctx, info: validISCSIVolumeInfoEmptyTarget}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      iscsiFields
+		stateSetter func(fields iscsiFields)
+		args        args
+		wantErr     bool
+	}{
+		{
+			name:        "discovery complete but devices not found",
+			fields:      getDefaultISCSIFields(ctrl),
+			stateSetter: func(_ iscsiFields) {},
+			args:        emptyTargetArgs,
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ISCSIConnector{
+				baseConnector:                          tt.fields.baseConnector,
+				multipath:                              tt.fields.multipath,
+				powerpath:                              tt.fields.powerpath,
+				scsi:                                   tt.fields.scsi,
+				iscsiLib:                               tt.fields.iscsiLib,
+				manualSessionManagement:                tt.fields.manualSessionManagement,
+				waitDeviceTimeout:                      tt.fields.waitDeviceTimeout,
+				waitDeviceRegisterTimeout:              tt.fields.waitDeviceRegisterTimeout,
+				failedSessionMinimumLoginRetryInterval: tt.fields.failedSessionMinimumLoginRetryInterval,
+				loginLock:                              tt.fields.loginLock,
+				limiter:                                tt.fields.limiter,
+				singleCall:                             tt.fields.singleCall,
+				filePath:                               tt.fields.filePath,
+			}
+			tt.stateSetter(tt.fields)
+			if _, err := c.connectPowerpathDevice(tt.args.ctx, tt.args.sessions, tt.args.info); (err != nil) != tt.wantErr {
+				t.Errorf("connectPowerpathDevice() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestISCSIConnector_tryEnableManualISCSISessionMGMT(t *testing.T) {
+	type args struct {
+		ctx    context.Context
+		target ISCSITargetInfo
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	target := ISCSITargetInfo{
+		Portal: validISCSIPortal1,
+		Target: validISCSITarget1,
+	}
+	defaultArgs := args{ctx: ctx, target: target}
+
+	tests := []struct {
+		name        string
+		fields      iscsiFields
+		args        args
+		stateSetter func(fields iscsiFields)
+		wantErr     bool
+	}{
+		{
+			name:   "CreateOrUpdateNode not returning any error",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "CreateOrUpdateNode not returning error",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(errors.New("generic error")).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ISCSIConnector{
+				baseConnector:                          tt.fields.baseConnector,
+				multipath:                              tt.fields.multipath,
+				powerpath:                              tt.fields.powerpath,
+				scsi:                                   tt.fields.scsi,
+				iscsiLib:                               tt.fields.iscsiLib,
+				manualSessionManagement:                tt.fields.manualSessionManagement,
+				waitDeviceTimeout:                      tt.fields.waitDeviceTimeout,
+				waitDeviceRegisterTimeout:              tt.fields.waitDeviceRegisterTimeout,
+				failedSessionMinimumLoginRetryInterval: tt.fields.failedSessionMinimumLoginRetryInterval,
+				loginLock:                              tt.fields.loginLock,
+				limiter:                                tt.fields.limiter,
+				singleCall:                             tt.fields.singleCall,
+				filePath:                               tt.fields.filePath,
+				chapEnabled:                            true,
+				chapUser:                               "user",
+				chapPassword:                           "password",
+			}
+			tt.stateSetter(tt.fields)
+			if err := c.tryEnableManualISCSISessionMGMT(tt.args.ctx, tt.args.target); (err != nil) != tt.wantErr {
+				t.Errorf("tryEnableManualISCSISessionMGMT() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

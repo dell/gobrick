@@ -117,3 +117,52 @@ func Test_readWWID(_ *testing.T) {
 	m := multipath.NewMultipath("/noderoot")
 	fmt.Println(m.GetDMWWID(context.Background(), "dm-80"))
 }
+
+func TestParseLuns(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected []int
+	}{
+		{
+			input:    "1-3,5,7-9",
+			expected: []int{1, 2, 3, 5, 7, 8, 9},
+		},
+		{
+			input:    "2,4,6",
+			expected: []int{2, 4, 6},
+		},
+		{
+			input:    "1,3,5,7,9",
+			expected: []int{1, 3, 5, 7, 9},
+		},
+		{
+			input:    "1-3,5,7-9,10-12",
+			expected: []int{1, 2, 3, 5, 7, 8, 9, 10, 11, 12},
+		},
+		{
+			input:    "1-3,5,7-9,10-12,14",
+			expected: []int{1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 14},
+		},
+		{
+			input:    "1-3,5,7-9,10-12,14,15-17",
+			expected: []int{1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17},
+		},
+		{
+			input:    "1-3,5,7-9,10-12,14,15-17,19-21",
+			expected: []int{1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 19, 20, 21},
+		},
+		{
+			input:    "1-3,5,7-9,10-12,14,15-17,19-21,23",
+			expected: []int{1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 19, 20, 21, 23},
+		},
+		{
+			input:    "1-3,5,7-9,10-12,14,15-17,19-21,23,25",
+			expected: []int{1, 2, 3, 5, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 19, 20, 21, 23, 25},
+		},
+	}
+
+	for _, tc := range testCases {
+		result := parseLuns(tc.input)
+		assert.Equal(t, tc.expected, result, "Unexpected result for input: %s", tc.input)
+	}
+}

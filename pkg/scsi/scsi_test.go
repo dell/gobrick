@@ -20,6 +20,7 @@ package scsi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -60,6 +61,27 @@ func getDefaultSCSIFields(ctrl *gomock.Controller) scsiFields {
 		os:         osMock,
 		osexec:     osExecMock,
 		singleCall: &singleflight.Group{},
+	}
+}
+
+func TestDevicesHaveDifferentParentsErr_Error(t *testing.T) {
+	tests := []struct {
+		name string
+		err  *DevicesHaveDifferentParentsErr
+		want string
+	}{
+		{
+			name: "Test DevicesHaveDifferentParentsErr",
+			err:  &DevicesHaveDifferentParentsErr{},
+			want: "device have different parent DMs",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.err.Error(); got != tt.want {
+				t.Errorf("DevicesHaveDifferentParentsErr.Error() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -604,6 +626,108 @@ func Test_scsi_GetDeviceWWN(t *testing.T) {
 	}
 }
 
+func Test_scsi_GetNVMEDeviceWWN(t *testing.T) {
+	type args struct {
+		ctx     context.Context
+		devices []string
+	}
+
+	ctx := context.Background()
+
+	defaultArgs := args{ctx: ctx, devices: []string{mh.ValidDeviceName}}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := mh.MockHelper{
+		Ctrl: ctrl,
+		OSReadFileCallPath: fmt.Sprintf(
+			"/sys/block/%s/wwid", mh.ValidDeviceName),
+		OSEXECCommandContextName: "chroot",
+		OSEXECCommandContextArgs: []string{testCHRoot, scsiIDPath, "-g", "-p", "0x83", "/dev/" + mh.ValidDeviceName},
+	}
+
+	tests := []struct {
+		name        string
+		fields      scsiFields
+		stateSetter func(fields scsiFields)
+		args        args
+		want        string
+		wantErr     bool
+	}{
+		{
+			name:   "not found",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				mock.OSReadFileErr(fields.os)
+				mock.OSIsNotExistOK(fields.os)
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "found",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				mock.OSReadFileOKReturn = mh.ValidSYSFCWWID
+				mock.OSReadFileOK(fields.os)
+			},
+			args:    defaultArgs,
+			wantErr: false,
+			want:    mh.ValidWWID,
+		},
+		{
+			name:   "not found with scsi_id",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				mock.OSReadFileErr(fields.os)
+				mock.OSIsNotExistOKReturn = true
+				mock.OSIsNotExistOK(fields.os)
+				_, cmdMock := mock.OSExecCommandContextOK(fields.osexec)
+				mock.OSExecCmdErr(cmdMock)
+			},
+			args:    defaultArgs,
+			wantErr: true,
+			want:    "",
+		},
+		{
+			name:   "found with scsi_id",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				mock.OSReadFileErr(fields.os)
+				mock.OSIsNotExistOKReturn = true
+				mock.OSIsNotExistOK(fields.os)
+				_, cmdMock := mock.OSExecCommandContextOK(fields.osexec)
+				mock.OSEXECCmdOKReturn = mh.ValidWWID
+				mock.OSExecCmdOK(cmdMock)
+			},
+			args:    defaultArgs,
+			wantErr: false,
+			want:    mh.ValidWWID,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Scsi{
+				chroot:     tt.fields.chroot,
+				filePath:   tt.fields.filePath,
+				os:         tt.fields.os,
+				osexec:     tt.fields.osexec,
+				singleCall: tt.fields.singleCall,
+			}
+			tt.stateSetter(tt.fields)
+			got, err := s.GetNVMEDeviceWWN(tt.args.ctx, tt.args.devices)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetNVMEDeviceWWN() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("GetNVMEDeviceWWN() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func Test_scsi_GetDevicesByWWN(t *testing.T) {
 	type args struct {
 		ctx context.Context
@@ -822,6 +946,112 @@ func Test_scsi_GetDMDeviceByChildren(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("GetDMDeviceByChildren() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetNVMEDMDeviceByChildren(t *testing.T) {
+	type args struct {
+		ctx     context.Context
+		devices []string
+	}
+
+	ctx := context.Background()
+
+	defaultArgs := args{
+		ctx:     ctx,
+		devices: []string{mh.ValidDeviceName, mh.ValidDeviceName2},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      scsiFields
+		stateSetter func(fields scsiFields)
+		args        args
+		want        string
+		wantErr     bool
+	}{
+		{
+			name:        "error - dm not found",
+			fields:      getDefaultSCSIFields(ctrl),
+			stateSetter: func(_ scsiFields) {},
+			args: args{
+				ctx:     ctx,
+				devices: []string{},
+			},
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:   "error while resolve glob",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, errors.New("glob error")).AnyTimes()
+			},
+			args:    defaultArgs,
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:   "Error in reading file",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"match1", "match2"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte{}, errors.New("read file error")).AnyTimes()
+			},
+			args:    defaultArgs,
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:   "Error - Devices Have Different Parents",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/fc_host/host0", "/sys/class/fc_host/host1"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("mpath"), nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:   "Success",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/fc_host/host0", "/sys/class/fc_host/host1"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("host0"), nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			want:    "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.stateSetter != nil {
+				tt.stateSetter(tt.fields)
+			}
+
+			s := &Scsi{
+				chroot:     tt.fields.chroot,
+				filePath:   tt.fields.filePath,
+				os:         tt.fields.os,
+				osexec:     tt.fields.osexec,
+				singleCall: tt.fields.singleCall,
+			}
+
+			got, err := s.GetNVMEDMDeviceByChildren(tt.args.ctx, tt.args.devices)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Scsi.GetNVMEDMDeviceByChildren() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("Scsi.GetNVMEDMDeviceByChildren() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -1180,6 +1410,71 @@ func Test_scsi_WaitUdevSymlink(t *testing.T) {
 			tt.stateSetter(tt.fields)
 			if err := s.WaitUdevSymlink(tt.args.ctx, tt.args.deviceName, tt.args.wwn); (err != nil) != tt.wantErr {
 				t.Errorf("WaitUdevSymlink() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_scsi_WaitUdevSymlinkNVMe(t *testing.T) {
+	type args struct {
+		ctx        context.Context
+		deviceName string
+		wwn        string
+	}
+
+	ctx := context.Background()
+
+	devArgs := args{ctx: ctx, deviceName: mh.ValidDeviceName, wwn: mh.ValidWWID}
+
+	devPath := fmt.Sprintf("/dev/disk/by-id/scsi-%s", mh.ValidWWID)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := mh.MockHelper{
+		Ctrl: ctrl,
+	}
+
+	tests := []struct {
+		name        string
+		fields      scsiFields
+		stateSetter func(fields scsiFields)
+		args        args
+		wantErr     bool
+	}{
+		{
+			name:   "dev found",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				mock.FilePathEvalSymlinksCallPath = devPath
+				mock.FilePathEvalSymlinksOKReturn = mh.ValidDevicePath
+				mock.FilePathEvalSymlinksOK(fields.filePath)
+			},
+			args:    devArgs,
+			wantErr: false,
+		},
+		{
+			name:   "symlink point to unexpected device",
+			fields: getDefaultSCSIFields(ctrl),
+			stateSetter: func(fields scsiFields) {
+				mock.FilePathEvalSymlinksOKReturn = mh.ValidDevicePath2
+				mock.FilePathEvalSymlinksOK(fields.filePath)
+			},
+			args:    devArgs,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Scsi{
+				filePath:   tt.fields.filePath,
+				os:         tt.fields.os,
+				osexec:     tt.fields.osexec,
+				singleCall: tt.fields.singleCall,
+			}
+			tt.stateSetter(tt.fields)
+			if err := s.WaitUdevSymlinkNVMe(tt.args.ctx, tt.args.deviceName, tt.args.wwn); (err != nil) != tt.wantErr {
+				t.Errorf("WaitUdevSymlinkNVMe() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

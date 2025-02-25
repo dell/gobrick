@@ -17,6 +17,7 @@ package gobrick
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -237,6 +238,48 @@ func TestFCConnector_ConnectVolume(t *testing.T) {
 		want        Device
 		wantErr     bool
 	}{
+		{
+			name:        "at least one FC target required",
+			fields:      getDefaultFCFields(ctrl),
+			stateSetter: func(_ fcFields) {},
+			args: args{
+				ctx: ctx,
+				info: FCVolumeInfo{
+					Targets: []FCTargetInfo{},
+					Lun:     validLunNumber,
+				},
+			},
+			want:    Device{},
+			wantErr: true,
+		},
+		{
+			name:        "invalid target info",
+			fields:      getDefaultFCFields(ctrl),
+			stateSetter: func(_ fcFields) {},
+			args: args{
+				ctx: ctx,
+				info: FCVolumeInfo{
+					Targets: []FCTargetInfo{
+						{
+							WWPN: "",
+						},
+					},
+					Lun: validLunNumber,
+				},
+			},
+			want:    Device{},
+			wantErr: true,
+		},
+		{
+			name:   "failed to get FC hbas info AS FC is not supported for the host",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat(gomock.Any()).Return(nil, errors.New("FC is not supported for this host")).AnyTimes()
+			},
+			args:    defaultArgs,
+			want:    Device{},
+			wantErr: true,
+		},
 		{
 			name:   "ok-multipath",
 			fields: getDefaultFCFields(ctrl),

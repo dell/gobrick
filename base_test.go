@@ -1,5 +1,5 @@
 /*
-Copyright © 2020-2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+Copyright © 2020-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,8 +16,14 @@ limitations under the License.
 package gobrick
 
 import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
 	mh "github.com/dell/gobrick/internal/mockhelper"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
+	intpowerpath "github.com/dell/gobrick/internal/powerpath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
 	"github.com/dell/gobrick/pkg/scsi"
 	"github.com/golang/mock/gomock"
@@ -439,4 +445,151 @@ func BaserConnectorDisconnectDevicesByDeviceNameMock(mock *baseMockHelper,
 	mock.SCSIGetDevicesByWWNOK(scsi)
 
 	BaseConnectorCleanDeviceMock(mock, scsi)
+}
+
+type BaseConnectorFields struct {
+	multipath *intmultipath.MockMultipath
+	powerpath *intpowerpath.MockPowerpath
+	scsi      *intscsi.MockSCSI
+}
+
+func getTestBaseConnector(ctrl *gomock.Controller) BaseConnectorFields {
+	scsi := intscsi.NewMockSCSI(ctrl)
+	mp := intmultipath.NewMockMultipath(ctrl)
+	pp := intpowerpath.NewMockPowerpath(ctrl)
+	return BaseConnectorFields{
+		multipath: mp,
+		powerpath: pp,
+		scsi:      scsi,
+	}
+}
+
+func TestNewBaseConnector(t *testing.T) {
+	mp := &intmultipath.MockMultipath{}
+	pp := &intpowerpath.MockPowerpath{}
+	s := &intscsi.MockSCSI{}
+
+	tests := []struct {
+		name                 string
+		params               baseConnectorParams
+		expectedFlushRetries int
+		expectedFlushTimeout time.Duration
+		expectedRetryTimeout time.Duration
+	}{
+		{
+			name:                 "default values",
+			params:               baseConnectorParams{},
+			expectedFlushRetries: multipathFlushRetriesDefault,
+			expectedFlushTimeout: multipathFlushTimeoutDefault,
+			expectedRetryTimeout: multipathFlushRetryTimeoutDefault,
+		},
+		{
+			name: "custom values",
+			params: baseConnectorParams{
+				MultipathFlushRetries:      20,
+				MultipathFlushTimeout:      time.Second * 10,
+				MultipathFlushRetryTimeout: time.Second * 3,
+			},
+			expectedFlushRetries: 20,
+			expectedFlushTimeout: time.Second * 10,
+			expectedRetryTimeout: time.Second * 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conn := newBaseConnector(mp, pp, s, tt.params)
+
+			if conn.multipathFlushRetries != tt.expectedFlushRetries {
+				t.Errorf("expected multipathFlushRetries to be %d, got %d", tt.expectedFlushRetries, conn.multipathFlushRetries)
+			}
+
+			if conn.multipathFlushTimeout != tt.expectedFlushTimeout {
+				t.Errorf("expected multipathFlushTimeout to be %v, got %v", tt.expectedFlushTimeout, conn.multipathFlushTimeout)
+			}
+
+			if conn.multipathFlushRetryTimeout != tt.expectedRetryTimeout {
+				t.Errorf("expected multipathFlushRetryTimeout to be %v, got %v", tt.expectedRetryTimeout, conn.multipathFlushRetryTimeout)
+			}
+		})
+	}
+}
+
+func TestDisconnectDevicesByDeviceName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	type args struct {
+		ctx        context.Context
+		DeviceName string
+	}
+
+	tests := []struct {
+		name        string
+		args        args
+		fields      BaseConnectorFields
+		stateSetter func(fields BaseConnectorFields)
+		expectedErr bool
+	}{
+		{
+			name: "Device not found",
+			args: args{
+				ctx:        context.Background(),
+				DeviceName: "non-existent-device",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+			},
+			expectedErr: false,
+		},
+		{
+			name: "Device has device mapper prefix",
+			args: args{
+				ctx:        context.Background(),
+				DeviceName: deviceMapperPrefix + "test-device",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true)
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, nil)
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return("", errors.New("failed to read WWN for DM"))
+				// fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, nil)
+			},
+			expectedErr: true,
+		},
+		{
+			name: "Device does not have device mapper prefix",
+			args: args{
+				ctx:        context.Background(),
+				DeviceName: "test-device",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return("test-wwn", nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to find devices by wwn"))
+			},
+			expectedErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			bc := &baseConnector{
+				multipath: test.fields.multipath,
+				powerpath: test.fields.powerpath,
+				scsi:      test.fields.scsi,
+			}
+
+			test.stateSetter(test.fields)
+
+			err := bc.disconnectDevicesByDeviceName(test.args.ctx, test.args.DeviceName)
+
+			if (err != nil) != test.expectedErr {
+				t.Errorf("disconnectDevicesByDeviceName() error = %v, wantErr %v", err, test.expectedErr)
+				return
+			}
+		})
+	}
 }

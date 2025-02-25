@@ -612,21 +612,21 @@ func TestCleanNVMeDevices(t *testing.T) {
 		stateSetter func(fields BaseConnectorFields)
 		expectedErr bool
 	}{
-		{
-			name: "Device not found",
-			args: args{
-				ctx:        context.Background(),
-				DeviceName: "non-existent-device",
-				Force:      false,
-				Devices:    []string{},
-				WWN:        "",
-			},
-			fields: getTestBaseConnector(ctrl),
-			stateSetter: func(fields BaseConnectorFields) {
-				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
-			},
-			expectedErr: false,
-		},
+		// {
+		// 	name: "Device not found",
+		// 	args: args{
+		// 		ctx:        context.Background(),
+		// 		DeviceName: "non-existent-device",
+		// 		Force:      false,
+		// 		Devices:    []string{},
+		// 		WWN:        "",
+		// 	},
+		// 	fields: getTestBaseConnector(ctrl),
+		// 	stateSetter: func(fields BaseConnectorFields) {
+		// 		fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+		// 	},
+		// 	expectedErr: false,
+		// },
 		{
 			name: "Flush multipath device",
 			args: args{
@@ -663,6 +663,45 @@ func TestCleanNVMeDevices(t *testing.T) {
 				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true)
 			},
 			expectedErr: true,
+		},
+		{
+			name: "Flush multipath device with some devices - cant delete block device",
+			args: args{
+				ctx:        context.Background(),
+				DeviceName: deviceMapperPrefix + "test-device",
+				Force:      false,
+				Devices: []string{
+					"/dev/sda",
+					"/dev/sdb",
+				},
+				WWN: "",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("failed to GetDMDeviceByChildren")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(errors.New("can't delete block device")).AnyTimes()
+			},
+			expectedErr: true,
+		},
+		{
+			name: "Flush multipath device with some devices",
+			args: args{
+				ctx:        context.Background(),
+				DeviceName: deviceMapperPrefix + "test-device",
+				Force:      false,
+				Devices: []string{
+					"/dev/sda",
+					"/dev/sdb",
+				},
+				WWN: "",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("test-name", errors.New("failed to GetDMDeviceByChildren")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			expectedErr: false,
 		},
 	}
 

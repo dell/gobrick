@@ -598,11 +598,10 @@ func TestCleanNVMeDevices(t *testing.T) {
 	defer ctrl.Finish()
 
 	type args struct {
-		ctx        context.Context
-		DeviceName string
-		Force      bool
-		Devices    []string
-		WWN        string
+		ctx     context.Context
+		Force   bool
+		Devices []string
+		WWN     string
 	}
 
 	tests := []struct {
@@ -612,29 +611,13 @@ func TestCleanNVMeDevices(t *testing.T) {
 		stateSetter func(fields BaseConnectorFields)
 		expectedErr bool
 	}{
-		// {
-		// 	name: "Device not found",
-		// 	args: args{
-		// 		ctx:        context.Background(),
-		// 		DeviceName: "non-existent-device",
-		// 		Force:      false,
-		// 		Devices:    []string{},
-		// 		WWN:        "",
-		// 	},
-		// 	fields: getTestBaseConnector(ctrl),
-		// 	stateSetter: func(fields BaseConnectorFields) {
-		// 		fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
-		// 	},
-		// 	expectedErr: false,
-		// },
 		{
 			name: "Flush multipath device",
 			args: args{
-				ctx:        context.Background(),
-				DeviceName: deviceMapperPrefix + "test-device",
-				Force:      false,
-				Devices:    []string{},
-				WWN:        "",
+				ctx:     context.Background(),
+				Force:   false,
+				Devices: []string{},
+				WWN:     "",
 			},
 			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
@@ -649,11 +632,10 @@ func TestCleanNVMeDevices(t *testing.T) {
 		{
 			name: "Failed to flush multipath device",
 			args: args{
-				ctx:        context.Background(),
-				DeviceName: deviceMapperPrefix + "test-device",
-				Force:      false,
-				Devices:    []string{},
-				WWN:        "",
+				ctx:     context.Background(),
+				Force:   false,
+				Devices: []string{},
+				WWN:     "",
 			},
 			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
@@ -667,9 +649,8 @@ func TestCleanNVMeDevices(t *testing.T) {
 		{
 			name: "Flush multipath device with some devices - cant delete block device",
 			args: args{
-				ctx:        context.Background(),
-				DeviceName: deviceMapperPrefix + "test-device",
-				Force:      false,
+				ctx:   context.Background(),
+				Force: false,
 				Devices: []string{
 					"/dev/sda",
 					"/dev/sdb",
@@ -686,9 +667,8 @@ func TestCleanNVMeDevices(t *testing.T) {
 		{
 			name: "Flush multipath device with some devices",
 			args: args{
-				ctx:        context.Background(),
-				DeviceName: deviceMapperPrefix + "test-device",
-				Force:      false,
+				ctx:   context.Background(),
+				Force: false,
 				Devices: []string{
 					"/dev/sda",
 					"/dev/sdb",
@@ -720,6 +700,77 @@ func TestCleanNVMeDevices(t *testing.T) {
 
 			if (err != nil) != test.expectedErr {
 				t.Errorf("cleanNVMeDevices() error = %v, wantErr %v", err, test.expectedErr)
+				return
+			}
+		})
+	}
+}
+
+func TestCleanDevices(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	type args struct {
+		ctx     context.Context
+		Force   bool
+		Devices []string
+		WWN     string
+	}
+
+	tests := []struct {
+		name        string
+		args        args
+		fields      BaseConnectorFields
+		stateSetter func(fields BaseConnectorFields)
+		expectedErr bool
+	}{
+		{
+			name: "Failed to flush multipath device",
+			args: args{
+				ctx:     context.Background(),
+				Force:   false,
+				Devices: []string{},
+				WWN:     "test-wwn",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+			},
+			expectedErr: true,
+		},
+		{
+			name: "Flush multipath device with some devices AND cant delete block device",
+			args: args{
+				ctx:     context.Background(),
+				Force:   false,
+				Devices: []string{},
+				WWN:     "",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("failed to GetDMDeviceByChildren")).AnyTimes()
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				fields.powerpath.EXPECT().FlushDevice(gomock.Any()).Return(errors.New("failed to flush device")).AnyTimes()
+			},
+			expectedErr: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			bc := &baseConnector{
+				multipath:             test.fields.multipath,
+				powerpath:             test.fields.powerpath,
+				scsi:                  test.fields.scsi,
+				multipathFlushRetries: 0,
+			}
+
+			test.stateSetter(test.fields)
+
+			err := bc.cleanDevices(test.args.ctx, test.args.Force, test.args.Devices, test.args.WWN)
+
+			if (err != nil) != test.expectedErr {
+				t.Errorf("cleanDevices() error = %v, wantErr %v", err, test.expectedErr)
 				return
 			}
 		})

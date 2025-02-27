@@ -776,3 +776,76 @@ func TestCleanDevices(t *testing.T) {
 		})
 	}
 }
+
+func TestGetNVMEDMWWN(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	type args struct {
+		ctx        context.Context
+		DeviceName string
+	}
+
+	tests := []struct {
+		name        string
+		args        args
+		fields      BaseConnectorFields
+		stateSetter func(fields BaseConnectorFields)
+		expectedWWN string
+		expectedErr bool
+	}{
+		{
+			name: "Failed to read WWN for DM",
+			args: args{
+				ctx:        context.Background(),
+				DeviceName: "non-existent-device",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
+
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), gomock.Any()).Return("", errors.New("failed to read WWN for DM")).AnyTimes()
+			},
+			expectedWWN: "",
+			expectedErr: true,
+		},
+		{
+			name: "Failed to resolve DM",
+			args: args{
+				ctx:        context.Background(),
+				DeviceName: "non-existent-device",
+			},
+			fields: getTestBaseConnector(ctrl),
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to get children for DM")).AnyTimes()
+
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", errors.New("failed to resolve DM")).AnyTimes()
+			},
+			expectedWWN: "",
+			expectedErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			bc := &baseConnector{
+				multipath: test.fields.multipath,
+				powerpath: test.fields.powerpath,
+				scsi:      test.fields.scsi,
+			}
+
+			test.stateSetter(test.fields)
+
+			wwn, err := bc.getNVMEDMWWN(test.args.ctx, test.args.DeviceName)
+
+			if (err != nil) != test.expectedErr {
+				t.Errorf("getNVMEDMWWN() error = %v, wantErr %v", err, test.expectedErr)
+				return
+			}
+
+			if wwn != test.expectedWWN {
+				t.Errorf("getNVMEDMWWN() = %v, want %v", wwn, test.expectedWWN)
+			}
+		})
+	}
+}

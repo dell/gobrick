@@ -63,6 +63,19 @@ type FCConnectorParams struct {
 	MaxParallelOperations int
 }
 
+// External function variables
+var (
+	traceFuncCallFunc = tracer.TraceFuncCall
+
+	getPowerPathDevicesFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context, devices []string) (string, error) {
+		return fc.powerpath.GetPowerPathDevices
+	}
+
+	waitUdevSymlinkFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context, device, wwn string) error {
+		return fc.scsi.WaitUdevSymlink
+	}
+)
+
 // NewFCConnector create new FCConnector
 func NewFCConnector(params FCConnectorParams) *FCConnector {
 	mp := multipath.NewMultipath(params.Chroot)
@@ -239,15 +252,43 @@ func (fc *FCConnector) validateFCVolumeInfo(ctx context.Context, info FCVolumeIn
 	return nil
 }
 
+// External function variables
+var (
+	waitForDeviceWWNFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+		return fc.waitForDeviceWWN
+	}
+	getDevicesByWWNFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context, wwn string) ([]string, error) {
+		return fc.scsi.GetDevicesByWWN
+	}
+	isPowerpathDaemonRunningFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context) bool {
+		return fc.powerpath.IsDaemonRunning
+	}
+	waitPowerpathDeviceFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context, wwn string, devices []string) (string, error) {
+		return fc.waitPowerpathDevice
+	}
+	isMultipathDaemonRunningFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context) bool {
+		return fc.multipath.IsDaemonRunning
+	}
+	waitSingleDeviceFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context, wwn string, devices []string) (string, error) {
+		return fc.waitSingleDevice
+	}
+	waitMultipathDeviceFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context, wwn string, devices []string) (string, error) {
+		return fc.waitMultipathDevice
+	}
+	checkDeviceIsValidFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context, devicePath string) bool {
+		return fc.scsi.CheckDeviceIsValid
+	}
+)
+
 func (fc *FCConnector) connectDevice(
 	ctx context.Context, hbas []FCHBA, info FCVolumeInfo,
 ) (Device, error) {
-	defer tracer.TraceFuncCall(ctx, "FCConnector.connectDevice")()
-	wwn, err := fc.waitForDeviceWWN(ctx, hbas, info)
+	defer traceFuncCallFunc(ctx, "FCConnector.connectDevice")()
+	wwn, err := waitForDeviceWWNFunc(ctx, fc)(ctx, hbas, info)
 	if err != nil {
 		return Device{}, err
 	}
-	devices, err := fc.scsi.GetDevicesByWWN(ctx, wwn)
+	devices, err := getDevicesByWWNFunc(ctx, fc)(ctx, wwn)
 	if err != nil || len(devices) == 0 {
 		msg := "failed to get devices by WWN: " + wwn
 		logger.Error(ctx, msg)
@@ -256,28 +297,28 @@ func (fc *FCConnector) connectDevice(
 
 	var device string
 	var isMP bool
-	if fc.powerpath.IsDaemonRunning(ctx) {
-		device, err = fc.waitPowerpathDevice(ctx, wwn, devices)
+	if isPowerpathDaemonRunningFunc(ctx, fc)(ctx) {
+		device, err = waitPowerpathDeviceFunc(ctx, fc)(ctx, wwn, devices)
 		if err != nil {
 			msg := "failed to find powerpath device"
 			logger.Error(ctx, msg)
 			return Device{}, errors.New(msg)
 		}
-	} else if !fc.multipath.IsDaemonRunning(ctx) {
-		device, err = fc.waitSingleDevice(ctx, wwn, devices)
+	} else if !isMultipathDaemonRunningFunc(ctx, fc)(ctx) {
+		device, err = waitSingleDeviceFunc(ctx, fc)(ctx, wwn, devices)
 		if err != nil {
 			return Device{}, err
 		}
 	} else {
 		isMP = true
-		device, err = fc.waitMultipathDevice(ctx, wwn, devices)
+		device, err = waitMultipathDeviceFunc(ctx, fc)(ctx, wwn, devices)
 		if err != nil {
 			msg := "failed to find multipath device"
 			logger.Error(ctx, msg)
 			return Device{}, errors.New(msg)
 		}
 	}
-	if !fc.scsi.CheckDeviceIsValid(ctx, path.Join("/dev/", device)) {
+	if !checkDeviceIsValidFunc(ctx, fc)(ctx, path.Join("/dev/", device)) {
 		msg := "multipath device was found but failed to read data from it"
 		logger.Error(ctx, msg)
 		return Device{}, errors.New(msg)
@@ -297,7 +338,7 @@ func (fc *FCConnector) waitSingleDevice(ctx context.Context, wwn string, devices
 		default:
 		}
 		for _, d := range devices {
-			if err := fc.scsi.WaitUdevSymlink(ctx, d, wwn); err == nil {
+			if err := waitUdevSymlinkFunc(ctx, fc)(ctx, d, wwn); err == nil {
 				return d, nil
 			}
 		}
@@ -308,18 +349,30 @@ func (fc *FCConnector) waitSingleDevice(ctx context.Context, wwn string, devices
 	return "", errors.New(msg)
 }
 
+var (
+	addWWIDFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context, wwn string) error {
+		return fc.multipath.AddWWID
+	}
+	addPathFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context, devPath string) error {
+		return fc.multipath.AddPath
+	}
+	getDMDeviceByChildrenFunc = func(_ context.Context, fc *FCConnector) func(ctx context.Context, devices []string) (string, error) {
+		return fc.scsi.GetDMDeviceByChildren
+	}
+)
+
 func (fc *FCConnector) waitMultipathDevice(
 	ctx context.Context, wwn string, devices []string,
 ) (string, error) {
-	defer tracer.TraceFuncCall(ctx, "FCConnector.waitMultipathDevice")()
-	err := fc.multipath.AddWWID(ctx, wwn)
+	defer traceFuncCallFunc(ctx, "FCConnector.waitMultipathDevice")()
+	err := addWWIDFunc(ctx, fc)(ctx, wwn)
 	if err != nil {
 		return "", err
 	}
 
 	for _, d := range devices {
 		devPath := path.Join("/dev/", d)
-		if err := fc.multipath.AddPath(ctx, devPath); err != nil {
+		if err := addPathFunc(ctx, fc)(ctx, devPath); err != nil {
 			logger.Info(ctx, err.Error())
 		}
 	}
@@ -331,9 +384,9 @@ func (fc *FCConnector) waitMultipathDevice(
 			return "", errors.New("waitMultipathDevice canceled")
 		default:
 		}
-		resp, err := fc.scsi.GetDMDeviceByChildren(ctx, devices)
+		resp, err := getDMDeviceByChildrenFunc(ctx, fc)(ctx, devices)
 		if err == nil {
-			if err := fc.scsi.WaitUdevSymlink(ctx, resp, wwn); err == nil {
+			if err := waitUdevSymlinkFunc(ctx, fc)(ctx, resp, wwn); err == nil {
 				mpath = resp
 				break
 			}
@@ -352,7 +405,7 @@ func (fc *FCConnector) waitMultipathDevice(
 func (fc *FCConnector) waitPowerpathDevice(
 	ctx context.Context, wwn string, devices []string,
 ) (string, error) {
-	defer tracer.TraceFuncCall(ctx, "FCConnector.waitPowerpathDevice")()
+	defer traceFuncCallFunc(ctx, "FCConnector.waitPowerpathDevice")()
 	var ppath string
 	for i := 0; i < int(fc.waitDeviceRegisterTimeout.Seconds()); i++ {
 		select {
@@ -360,9 +413,9 @@ func (fc *FCConnector) waitPowerpathDevice(
 			return "", errors.New("PowerpathDevice canceled")
 		default:
 		}
-		resp, err := fc.powerpath.GetPowerPathDevices(ctx, devices)
+		resp, err := getPowerPathDevicesFunc(ctx, fc)(ctx, devices)
 		if err == nil {
-			if err := fc.scsi.WaitUdevSymlink(ctx, resp, wwn); err == nil {
+			if err := waitUdevSymlinkFunc(ctx, fc)(ctx, resp, wwn); err == nil {
 				ppath = resp
 				break
 			}

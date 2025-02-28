@@ -30,6 +30,7 @@ import (
 	intscsi "github.com/dell/gobrick/internal/scsi"
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -567,6 +568,507 @@ func TestFCConnector_GetInitiatorPorts(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetInitiatorPorts() got = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestWaitPowerpathDevice(t *testing.T) {
+	originalTraceFuncCallFunc := traceFuncCallFunc
+	originalGetPowerPathDevicesFunc := getPowerPathDevicesFunc
+	originalWaitUdevSymlinkFunc := waitUdevSymlinkFunc
+
+	defer func() {
+		traceFuncCallFunc = originalTraceFuncCallFunc
+		getPowerPathDevicesFunc = originalGetPowerPathDevicesFunc
+		waitUdevSymlinkFunc = originalWaitUdevSymlinkFunc
+	}()
+
+	type testCase struct {
+		name          string
+		setupMocks    func()
+		expectedError string
+		expectedPpath string
+	}
+
+	testCases := []testCase{
+		{
+			name: "Powerpath device found",
+			setupMocks: func() {
+				getPowerPathDevicesFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
+					return func(ctx context.Context, devices []string) (string, error) {
+						return "device1", nil
+					}
+				}
+				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
+					return func(ctx context.Context, device, wwn string) error {
+						return nil
+					}
+				}
+			},
+			expectedError: "",
+			expectedPpath: "device1",
+		},
+		{
+			name: "Powerpath device not found",
+			setupMocks: func() {
+				getPowerPathDevicesFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
+					return func(ctx context.Context, devices []string) (string, error) {
+						return "", errors.New("device not found")
+					}
+				}
+			},
+			expectedError: "powerpath device for WWN test-wwn not found",
+			expectedPpath: "",
+		},
+		{
+			name: "Context canceled",
+			setupMocks: func() {
+				getPowerPathDevicesFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
+					return func(ctx context.Context, devices []string) (string, error) {
+						return "", nil
+					}
+				}
+				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
+					return func(ctx context.Context, device, wwn string) error {
+						return nil
+					}
+				}
+			},
+			expectedError: "powerpath device for WWN test-wwn not found",
+			expectedPpath: "",
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupMocks != nil {
+				tt.setupMocks()
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			fc := &FCConnector{
+				waitDeviceRegisterTimeout: 1 * time.Second,
+			}
+			ppath, err := fc.waitPowerpathDevice(ctx, "test-wwn", []string{"device1", "device2"})
+
+			if tt.expectedError != "" {
+				assert.EqualError(t, err, tt.expectedError)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.expectedPpath, ppath)
+		})
+	}
+}
+
+func TestConnectDevice(t *testing.T) {
+	originalTraceFuncCallFunc := traceFuncCallFunc
+	originalWaitForDeviceWWNFunc := waitForDeviceWWNFunc
+	originalGetDevicesByWWNFunc := getDevicesByWWNFunc
+	originalIsPowerpathDaemonRunningFunc := isPowerpathDaemonRunningFunc
+	originalWaitPowerpathDeviceFunc := waitPowerpathDeviceFunc
+	originalIsMultipathDaemonRunningFunc := isMultipathDaemonRunningFunc
+	originalWaitSingleDeviceFunc := waitSingleDeviceFunc
+	originalWaitMultipathDeviceFunc := waitMultipathDeviceFunc
+	originalCheckDeviceIsValidFunc := checkDeviceIsValidFunc
+
+	defer func() {
+		traceFuncCallFunc = originalTraceFuncCallFunc
+		waitForDeviceWWNFunc = originalWaitForDeviceWWNFunc
+		getDevicesByWWNFunc = originalGetDevicesByWWNFunc
+		isPowerpathDaemonRunningFunc = originalIsPowerpathDaemonRunningFunc
+		waitPowerpathDeviceFunc = originalWaitPowerpathDeviceFunc
+		isMultipathDaemonRunningFunc = originalIsMultipathDaemonRunningFunc
+		waitSingleDeviceFunc = originalWaitSingleDeviceFunc
+		waitMultipathDeviceFunc = originalWaitMultipathDeviceFunc
+		checkDeviceIsValidFunc = originalCheckDeviceIsValidFunc
+	}()
+
+	type testCase struct {
+		name           string
+		setupMocks     func()
+		expectedError  string
+		expectedDevice Device
+	}
+
+	testCases := []testCase{
+		{
+			name: "Successful connection with Powerpath",
+			setupMocks: func() {
+				waitForDeviceWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+					return func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+						return "test-wwn", nil
+					}
+				}
+				getDevicesByWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) ([]string, error) {
+					return func(ctx context.Context, wwn string) ([]string, error) {
+						return []string{"device1"}, nil
+					}
+				}
+				isPowerpathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
+					return func(ctx context.Context) bool {
+						return true
+					}
+				}
+				waitPowerpathDeviceFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string, devices []string) (string, error) {
+					return func(ctx context.Context, wwn string, devices []string) (string, error) {
+						return "device1", nil
+					}
+				}
+				checkDeviceIsValidFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devicePath string) bool {
+					return func(ctx context.Context, devicePath string) bool {
+						return true
+					}
+				}
+			},
+			expectedError:  "",
+			expectedDevice: Device{WWN: "test-wwn", Name: "device1"},
+		},
+		{
+			name: "Failed to get devices by WWN",
+			setupMocks: func() {
+				waitForDeviceWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+					return func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+						return "test-wwn", nil
+					}
+				}
+				getDevicesByWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) ([]string, error) {
+					return func(ctx context.Context, wwn string) ([]string, error) {
+						return nil, errors.New("failed to get devices by WWN")
+					}
+				}
+			},
+			expectedError:  "failed to get devices by WWN: test-wwn",
+			expectedDevice: Device{},
+		},
+		{
+			name: "Failed to find powerpath device",
+			setupMocks: func() {
+				waitForDeviceWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+					return func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+						return "test-wwn", nil
+					}
+				}
+				getDevicesByWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) ([]string, error) {
+					return func(ctx context.Context, wwn string) ([]string, error) {
+						return []string{"device1"}, nil
+					}
+				}
+				isPowerpathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
+					return func(ctx context.Context) bool {
+						return true
+					}
+				}
+				waitPowerpathDeviceFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string, devices []string) (string, error) {
+					return func(ctx context.Context, wwn string, devices []string) (string, error) {
+						return "", errors.New("failed to find powerpath device")
+					}
+				}
+			},
+			expectedError:  "failed to find powerpath device",
+			expectedDevice: Device{},
+		},
+		{
+			name: "Failed to find multipath device",
+			setupMocks: func() {
+				waitForDeviceWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+					return func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+						return "test-wwn", nil
+					}
+				}
+				getDevicesByWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) ([]string, error) {
+					return func(ctx context.Context, wwn string) ([]string, error) {
+						return []string{"device1"}, nil
+					}
+				}
+				isPowerpathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
+					return func(ctx context.Context) bool {
+						return false
+					}
+				}
+				isMultipathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
+					return func(ctx context.Context) bool {
+						return true
+					}
+				}
+				waitMultipathDeviceFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string, devices []string) (string, error) {
+					return func(ctx context.Context, wwn string, devices []string) (string, error) {
+						return "", errors.New("failed to find multipath device")
+					}
+				}
+			},
+			expectedError:  "failed to find multipath device",
+			expectedDevice: Device{},
+		},
+		{
+			name: "Failed to validate device",
+			setupMocks: func() {
+				waitForDeviceWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+					return func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+						return "test-wwn", nil
+					}
+				}
+				getDevicesByWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) ([]string, error) {
+					return func(ctx context.Context, wwn string) ([]string, error) {
+						return []string{"device1"}, nil
+					}
+				}
+				isPowerpathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
+					return func(ctx context.Context) bool {
+						return false
+					}
+				}
+				isMultipathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
+					return func(ctx context.Context) bool {
+						return true
+					}
+				}
+				waitMultipathDeviceFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string, devices []string) (string, error) {
+					return func(ctx context.Context, wwn string, devices []string) (string, error) {
+						return "device1", nil
+					}
+				}
+				checkDeviceIsValidFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devicePath string) bool {
+					return func(ctx context.Context, devicePath string) bool {
+						return false
+					}
+				}
+			},
+			expectedError:  "multipath device was found but failed to read data from it",
+			expectedDevice: Device{},
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupMocks != nil {
+				tt.setupMocks()
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			fc := &FCConnector{
+				waitDeviceRegisterTimeout: 1 * time.Second,
+			}
+			device, err := fc.connectDevice(ctx, []FCHBA{}, FCVolumeInfo{})
+
+			if tt.expectedError != "" {
+				assert.EqualError(t, err, tt.expectedError)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.expectedDevice, device)
+		})
+	}
+}
+
+func TestWaitSingleDevice(t *testing.T) {
+	originalWaitUdevSymlinkFunc := waitUdevSymlinkFunc
+
+	defer func() {
+		waitUdevSymlinkFunc = originalWaitUdevSymlinkFunc
+	}()
+
+	type testCase struct {
+		name           string
+		setupMocks     func()
+		expectedError  string
+		expectedDevice string
+	}
+
+	testCases := []testCase{
+		{
+			name: "Successful wait for single device",
+			setupMocks: func() {
+				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
+					return func(ctx context.Context, device, wwn string) error {
+						return nil
+					}
+				}
+			},
+			expectedError:  "",
+			expectedDevice: "device1",
+		},
+		{
+			name: "Wait device canceled",
+			setupMocks: func() {
+				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
+					return func(ctx context.Context, device, wwn string) error {
+						return errors.New("udev symlink error")
+					}
+				}
+			},
+			expectedError:  "timeout waiting device for wwn test-wwn",
+			expectedDevice: "",
+		},
+		{
+			name: "Timeout waiting for device",
+			setupMocks: func() {
+				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
+					return func(ctx context.Context, device, wwn string) error {
+						return errors.New("udev symlink error")
+					}
+				}
+			},
+			expectedError:  "timeout waiting device for wwn test-wwn",
+			expectedDevice: "",
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupMocks != nil {
+				tt.setupMocks()
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			fc := &FCConnector{
+				waitDeviceRegisterTimeout: 1 * time.Second,
+			}
+			device, err := fc.waitSingleDevice(ctx, "test-wwn", []string{"device1", "device2"})
+
+			if tt.expectedError != "" {
+				assert.EqualError(t, err, tt.expectedError)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.expectedDevice, device)
+		})
+	}
+}
+
+func TestWaitMultipathDevice(t *testing.T) {
+	originalTraceFuncCallFunc := traceFuncCallFunc
+	originalAddWWIDFunc := addWWIDFunc
+	originalAddPathFunc := addPathFunc
+	originalGetDMDeviceByChildrenFunc := getDMDeviceByChildrenFunc
+	originalWaitUdevSymlinkFunc := waitUdevSymlinkFunc
+
+	defer func() {
+		traceFuncCallFunc = originalTraceFuncCallFunc
+		addWWIDFunc = originalAddWWIDFunc
+		addPathFunc = originalAddPathFunc
+		getDMDeviceByChildrenFunc = originalGetDMDeviceByChildrenFunc
+		waitUdevSymlinkFunc = originalWaitUdevSymlinkFunc
+	}()
+
+	type testCase struct {
+		name          string
+		setupMocks    func()
+		expectedError string
+		expectedMpath string
+	}
+
+	testCases := []testCase{
+		{
+			name: "Successful wait for multipath device",
+			setupMocks: func() {
+				addWWIDFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) error {
+					return func(ctx context.Context, wwn string) error {
+						return nil
+					}
+				}
+				addPathFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devPath string) error {
+					return func(ctx context.Context, devPath string) error {
+						return nil
+					}
+				}
+				getDMDeviceByChildrenFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
+					return func(ctx context.Context, devices []string) (string, error) {
+						return "dm-0", nil
+					}
+				}
+				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
+					return func(ctx context.Context, device, wwn string) error {
+						return nil
+					}
+				}
+			},
+			expectedError: "",
+			expectedMpath: "dm-0",
+		},
+		{
+			name: "Failed to add WWID",
+			setupMocks: func() {
+				addWWIDFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) error {
+					return func(ctx context.Context, wwn string) error {
+						return errors.New("failed to add WWID")
+					}
+				}
+			},
+			expectedError: "failed to add WWID",
+			expectedMpath: "",
+		},
+		{
+			name: "Failed to find multipath device",
+			setupMocks: func() {
+				addWWIDFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) error {
+					return func(ctx context.Context, wwn string) error {
+						return nil
+					}
+				}
+				addPathFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devPath string) error {
+					return func(ctx context.Context, devPath string) error {
+						return nil
+					}
+				}
+				getDMDeviceByChildrenFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
+					return func(ctx context.Context, devices []string) (string, error) {
+						return "", errors.New("failed to find multipath device")
+					}
+				}
+			},
+			expectedError: "multipath device for WWN test-wwn not found",
+			expectedMpath: "",
+		},
+		{
+			name: "Wait multipath device canceled",
+			setupMocks: func() {
+				addWWIDFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) error {
+					return func(ctx context.Context, wwn string) error {
+						return nil
+					}
+				}
+				addPathFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devPath string) error {
+					return func(ctx context.Context, devPath string) error {
+						return nil
+					}
+				}
+				getDMDeviceByChildrenFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
+					return func(ctx context.Context, devices []string) (string, error) {
+						return "", nil
+					}
+				}
+			},
+			expectedError: "multipath device for WWN test-wwn not found",
+			expectedMpath: "",
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupMocks != nil {
+				tt.setupMocks()
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			fc := &FCConnector{
+				waitDeviceRegisterTimeout: 1 * time.Second,
+			}
+			mpath, err := fc.waitMultipathDevice(ctx, "test-wwn", []string{"device1", "device2"})
+
+			if tt.expectedError != "" {
+				assert.EqualError(t, err, tt.expectedError)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.expectedMpath, mpath)
 		})
 	}
 }

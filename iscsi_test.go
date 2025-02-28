@@ -811,3 +811,85 @@ func TestISCSIConnector_tryEnableManualISCSISessionMGMT(t *testing.T) {
 		})
 	}
 }
+
+func TestISCSIConnector_findHCTLByISCSISessionID(t *testing.T) {
+	type args struct {
+		ctx       context.Context
+		sessionID string
+		lun       string
+	}
+
+	ctx := context.Background()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      iscsiFields
+		stateSetter func(fields iscsiFields)
+		args        args
+		want        scsi.HCTL
+		wantErr     bool
+	}{
+		{
+			name:   "can not parse values from filename",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/iscsi_host/host*/device/session1/target1"}, nil)
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "1",
+				lun:       "1",
+			},
+			want:    scsi.HCTL{},
+			wantErr: true,
+		},
+		{
+			name:   "Failed to resolve glob pattern",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, errors.New("failed to resolve HCTL"))
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "1",
+				lun:       "1",
+			},
+			want:    scsi.HCTL{},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ISCSIConnector{
+				baseConnector:                          tt.fields.baseConnector,
+				multipath:                              tt.fields.multipath,
+				powerpath:                              tt.fields.powerpath,
+				scsi:                                   tt.fields.scsi,
+				iscsiLib:                               tt.fields.iscsiLib,
+				manualSessionManagement:                tt.fields.manualSessionManagement,
+				waitDeviceTimeout:                      tt.fields.waitDeviceTimeout,
+				waitDeviceRegisterTimeout:              tt.fields.waitDeviceRegisterTimeout,
+				failedSessionMinimumLoginRetryInterval: tt.fields.failedSessionMinimumLoginRetryInterval,
+				loginLock:                              tt.fields.loginLock,
+				limiter:                                tt.fields.limiter,
+				singleCall:                             tt.fields.singleCall,
+				filePath:                               tt.fields.filePath,
+			}
+
+			tt.stateSetter(tt.fields)
+
+			got, err := c.findHCTLByISCSISessionID(tt.args.ctx, tt.args.sessionID, tt.args.lun)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("findHCTLByISCSISessionID() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("findHCTLByISCSISessionID() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

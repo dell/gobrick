@@ -595,12 +595,12 @@ func TestWaitPowerpathDevice(t *testing.T) {
 			name: "Powerpath device found",
 			setupMocks: func() {
 				getPowerPathDevicesFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
-					return func(ctx context.Context, devices []string) (string, error) {
+					return func(_ context.Context, _ []string) (string, error) {
 						return "device1", nil
 					}
 				}
 				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
-					return func(ctx context.Context, device, wwn string) error {
+					return func(_ context.Context, _, _ string) error {
 						return nil
 					}
 				}
@@ -612,7 +612,7 @@ func TestWaitPowerpathDevice(t *testing.T) {
 			name: "Powerpath device not found",
 			setupMocks: func() {
 				getPowerPathDevicesFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
-					return func(ctx context.Context, devices []string) (string, error) {
+					return func(_ context.Context, _ []string) (string, error) {
 						return "", errors.New("device not found")
 					}
 				}
@@ -624,12 +624,12 @@ func TestWaitPowerpathDevice(t *testing.T) {
 			name: "Context canceled",
 			setupMocks: func() {
 				getPowerPathDevicesFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
-					return func(ctx context.Context, devices []string) (string, error) {
+					return func(_ context.Context, _ []string) (string, error) {
 						return "", nil
 					}
 				}
 				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
-					return func(ctx context.Context, device, wwn string) error {
+					return func(_ context.Context, _, _ string) error {
 						return nil
 					}
 				}
@@ -698,27 +698,27 @@ func TestConnectDevice(t *testing.T) {
 			name: "Successful connection with Powerpath",
 			setupMocks: func() {
 				waitForDeviceWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
-					return func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+					return func(_ context.Context, _ []FCHBA, _ FCVolumeInfo) (string, error) {
 						return "test-wwn", nil
 					}
 				}
 				getDevicesByWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) ([]string, error) {
-					return func(ctx context.Context, wwn string) ([]string, error) {
+					return func(_ context.Context, _ string) ([]string, error) {
 						return []string{"device1"}, nil
 					}
 				}
 				isPowerpathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
-					return func(ctx context.Context) bool {
+					return func(_ context.Context) bool {
 						return true
 					}
 				}
 				waitPowerpathDeviceFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string, devices []string) (string, error) {
-					return func(ctx context.Context, wwn string, devices []string) (string, error) {
+					return func(_ context.Context, _ string, _ []string) (string, error) {
 						return "device1", nil
 					}
 				}
 				checkDeviceIsValidFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devicePath string) bool {
-					return func(ctx context.Context, devicePath string) bool {
+					return func(_ context.Context, _ string) bool {
 						return true
 					}
 				}
@@ -730,12 +730,12 @@ func TestConnectDevice(t *testing.T) {
 			name: "Failed to get devices by WWN",
 			setupMocks: func() {
 				waitForDeviceWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
-					return func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+					return func(_ context.Context, _ []FCHBA, _ FCVolumeInfo) (string, error) {
 						return "test-wwn", nil
 					}
 				}
 				getDevicesByWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) ([]string, error) {
-					return func(ctx context.Context, wwn string) ([]string, error) {
+					return func(_ context.Context, _ string) ([]string, error) {
 						return nil, errors.New("failed to get devices by WWN")
 					}
 				}
@@ -747,22 +747,22 @@ func TestConnectDevice(t *testing.T) {
 			name: "Failed to find powerpath device",
 			setupMocks: func() {
 				waitForDeviceWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
-					return func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+					return func(_ context.Context, _ []FCHBA, _ FCVolumeInfo) (string, error) {
 						return "test-wwn", nil
 					}
 				}
 				getDevicesByWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) ([]string, error) {
-					return func(ctx context.Context, wwn string) ([]string, error) {
+					return func(_ context.Context, _ string) ([]string, error) {
 						return []string{"device1"}, nil
 					}
 				}
 				isPowerpathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
-					return func(ctx context.Context) bool {
+					return func(_ context.Context) bool {
 						return true
 					}
 				}
 				waitPowerpathDeviceFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string, devices []string) (string, error) {
-					return func(ctx context.Context, wwn string, devices []string) (string, error) {
+					return func(_ context.Context, _ string, _ []string) (string, error) {
 						return "", errors.New("failed to find powerpath device")
 					}
 				}
@@ -774,27 +774,27 @@ func TestConnectDevice(t *testing.T) {
 			name: "Failed to find multipath device",
 			setupMocks: func() {
 				waitForDeviceWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
-					return func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+					return func(_ context.Context, _ []FCHBA, _ FCVolumeInfo) (string, error) {
 						return "test-wwn", nil
 					}
 				}
 				getDevicesByWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) ([]string, error) {
-					return func(ctx context.Context, wwn string) ([]string, error) {
+					return func(_ context.Context, _ string) ([]string, error) {
 						return []string{"device1"}, nil
 					}
 				}
 				isPowerpathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
-					return func(ctx context.Context) bool {
+					return func(_ context.Context) bool {
 						return false
 					}
 				}
 				isMultipathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
-					return func(ctx context.Context) bool {
+					return func(_ context.Context) bool {
 						return true
 					}
 				}
 				waitMultipathDeviceFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string, devices []string) (string, error) {
-					return func(ctx context.Context, wwn string, devices []string) (string, error) {
+					return func(_ context.Context, _ string, _ []string) (string, error) {
 						return "", errors.New("failed to find multipath device")
 					}
 				}
@@ -806,32 +806,32 @@ func TestConnectDevice(t *testing.T) {
 			name: "Failed to validate device",
 			setupMocks: func() {
 				waitForDeviceWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
-					return func(ctx context.Context, hbas []FCHBA, info FCVolumeInfo) (string, error) {
+					return func(_ context.Context, _ []FCHBA, _ FCVolumeInfo) (string, error) {
 						return "test-wwn", nil
 					}
 				}
 				getDevicesByWWNFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) ([]string, error) {
-					return func(ctx context.Context, wwn string) ([]string, error) {
+					return func(_ context.Context, _ string) ([]string, error) {
 						return []string{"device1"}, nil
 					}
 				}
 				isPowerpathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
-					return func(ctx context.Context) bool {
+					return func(_ context.Context) bool {
 						return false
 					}
 				}
 				isMultipathDaemonRunningFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context) bool {
-					return func(ctx context.Context) bool {
+					return func(_ context.Context) bool {
 						return true
 					}
 				}
 				waitMultipathDeviceFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string, devices []string) (string, error) {
-					return func(ctx context.Context, wwn string, devices []string) (string, error) {
+					return func(_ context.Context, _ string, _ []string) (string, error) {
 						return "device1", nil
 					}
 				}
 				checkDeviceIsValidFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devicePath string) bool {
-					return func(ctx context.Context, devicePath string) bool {
+					return func(_ context.Context, _ string) bool {
 						return false
 					}
 				}
@@ -883,7 +883,7 @@ func TestWaitSingleDevice(t *testing.T) {
 			name: "Successful wait for single device",
 			setupMocks: func() {
 				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
-					return func(ctx context.Context, device, wwn string) error {
+					return func(_ context.Context, _, _ string) error {
 						return nil
 					}
 				}
@@ -895,7 +895,7 @@ func TestWaitSingleDevice(t *testing.T) {
 			name: "Wait device canceled",
 			setupMocks: func() {
 				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
-					return func(ctx context.Context, device, wwn string) error {
+					return func(_ context.Context, _, _ string) error {
 						return errors.New("udev symlink error")
 					}
 				}
@@ -907,7 +907,7 @@ func TestWaitSingleDevice(t *testing.T) {
 			name: "Timeout waiting for device",
 			setupMocks: func() {
 				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
-					return func(ctx context.Context, device, wwn string) error {
+					return func(_ context.Context, _, _ string) error {
 						return errors.New("udev symlink error")
 					}
 				}
@@ -968,22 +968,22 @@ func TestWaitMultipathDevice(t *testing.T) {
 			name: "Successful wait for multipath device",
 			setupMocks: func() {
 				addWWIDFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) error {
-					return func(ctx context.Context, wwn string) error {
+					return func(_ context.Context, _ string) error {
 						return nil
 					}
 				}
 				addPathFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devPath string) error {
-					return func(ctx context.Context, devPath string) error {
+					return func(_ context.Context, _ string) error {
 						return nil
 					}
 				}
 				getDMDeviceByChildrenFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
-					return func(ctx context.Context, devices []string) (string, error) {
+					return func(_ context.Context, _ []string) (string, error) {
 						return "dm-0", nil
 					}
 				}
 				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
-					return func(ctx context.Context, device, wwn string) error {
+					return func(_ context.Context, _, _ string) error {
 						return nil
 					}
 				}
@@ -995,7 +995,7 @@ func TestWaitMultipathDevice(t *testing.T) {
 			name: "Failed to add WWID",
 			setupMocks: func() {
 				addWWIDFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) error {
-					return func(ctx context.Context, wwn string) error {
+					return func(_ context.Context, _ string) error {
 						return errors.New("failed to add WWID")
 					}
 				}
@@ -1007,17 +1007,17 @@ func TestWaitMultipathDevice(t *testing.T) {
 			name: "Failed to find multipath device",
 			setupMocks: func() {
 				addWWIDFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) error {
-					return func(ctx context.Context, wwn string) error {
+					return func(_ context.Context, _ string) error {
 						return nil
 					}
 				}
 				addPathFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devPath string) error {
-					return func(ctx context.Context, devPath string) error {
+					return func(_ context.Context, _ string) error {
 						return nil
 					}
 				}
 				getDMDeviceByChildrenFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
-					return func(ctx context.Context, devices []string) (string, error) {
+					return func(_ context.Context, _ []string) (string, error) {
 						return "", errors.New("failed to find multipath device")
 					}
 				}
@@ -1029,17 +1029,17 @@ func TestWaitMultipathDevice(t *testing.T) {
 			name: "Wait multipath device canceled",
 			setupMocks: func() {
 				addWWIDFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) error {
-					return func(ctx context.Context, wwn string) error {
+					return func(_ context.Context, _ string) error {
 						return nil
 					}
 				}
 				addPathFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devPath string) error {
-					return func(ctx context.Context, devPath string) error {
+					return func(_ context.Context, _ string) error {
 						return nil
 					}
 				}
 				getDMDeviceByChildrenFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
-					return func(ctx context.Context, devices []string) (string, error) {
+					return func(_ context.Context, _ []string) (string, error) {
 						return "", nil
 					}
 				}

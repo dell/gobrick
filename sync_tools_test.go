@@ -1,6 +1,3 @@
-//go:build test
-// +build test
-
 /*
  *
  * Copyright © 2020-2022 Dell Inc. or its subsidiaries. All Rights Reserved.

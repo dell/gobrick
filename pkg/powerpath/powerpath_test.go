@@ -1,6 +1,6 @@
 /*
  *
- * Copyright © 2020 Dell Inc. or its subsidiaries. All Rights Reserved.
+ * Copyright © 2020-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in coppliance with the License.
@@ -329,6 +329,14 @@ func Test_powerpath_runCommand(t *testing.T) {
 			want:    []byte(validResp),
 			wantErr: false,
 		},
+		{
+			name:        "invalid command",
+			fields:      chrootFields,
+			stateSetter: func(_ ppFields) {},
+			args:        args{ctx: ctx, command: "ls | cd", args: testArgs},
+			want:        []byte(nil),
+			wantErr:     true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -345,6 +353,92 @@ func Test_powerpath_runCommand(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("runCommand() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_powerpath_GetPowerPathDevices(t *testing.T) {
+	type args struct {
+		ctx     context.Context
+		devices []string
+	}
+
+	ctx := context.Background()
+
+	defaultArgs := args{
+		ctx:     ctx,
+		devices: []string{"device1"},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mocks := mh.MockHelper{
+		Ctrl:                     ctrl,
+		OSEXECCommandContextName: powerpathDaemon,
+		OSEXECCommandContextArgs: []string{"display", "dev=device1"},
+		OSEXECCmdOKReturn:        "Pseudo name=emc_power\n",
+	}
+
+	tests := []struct {
+		name        string
+		fields      ppFields
+		stateSetter func(fields ppFields)
+		args        args
+		want        string
+		wantErr     bool
+	}{
+		{
+			name:   "ok",
+			fields: getDefaultPPFields(ctrl),
+			stateSetter: func(fields ppFields) {
+				_, cmdMock := mocks.OSExecCommandContextOK(fields.osexec)
+				mocks.OSExecCmdOK(cmdMock)
+			},
+			args:    defaultArgs,
+			want:    "emc_power",
+			wantErr: false,
+		},
+		{
+			name:   "exec error",
+			fields: getDefaultPPFields(ctrl),
+			stateSetter: func(fields ppFields) {
+				_, cmdMock := mocks.OSExecCommandContextOK(fields.osexec)
+				mocks.OSExecCmdErr(cmdMock)
+			},
+			args:    defaultArgs,
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name:        "No devices",
+			fields:      getDefaultPPFields(ctrl),
+			stateSetter: func(_ ppFields) {},
+			args: args{
+				ctx:     ctx,
+				devices: []string{},
+			},
+			want:    "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pp := &Powerpath{
+				chroot:   tt.fields.chroot,
+				osexec:   tt.fields.osexec,
+				filePath: tt.fields.filePath,
+			}
+			tt.stateSetter(tt.fields)
+			got, err := pp.GetPowerPathDevices(tt.args.ctx, tt.args.devices)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetPowerPathDevices() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("GetPowerPathDevices() = %v, want %v", got, tt.want)
 			}
 		})
 	}

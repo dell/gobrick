@@ -23,6 +23,7 @@ import (
 	reflect "reflect"
 
 	goiscsi "github.com/dell/goiscsi"
+	gonvme "github.com/dell/gonvme"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -532,4 +533,160 @@ func (m *MockISCSILib) DeleteNode(target goiscsi.ISCSITarget) error {
 func (mr *MockISCSILibMockRecorder) DeleteNode(target interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNode", reflect.TypeOf((*MockISCSILib)(nil).DeleteNode), target)
+}
+
+// MockNVMe is a mock of NVMe interface.
+type MockNVMe struct {
+	ctrl     *gomock.Controller
+	recorder *MockNVMeMockRecorder
+}
+
+// MockNVMeMockRecorder is the mock recorder for MockNVMe.
+type MockNVMeMockRecorder struct {
+	mock *MockNVMe
+}
+
+// NewMockNVMe creates a new mock instance.
+func NewMockNVMe(ctrl *gomock.Controller) *MockNVMe {
+	mock := &MockNVMe{ctrl: ctrl}
+	mock.recorder = &MockNVMeMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockNVMe) EXPECT() *MockNVMeMockRecorder {
+	return m.recorder
+}
+
+// DiscoverNVMeFCTargets mocks base method.
+func (m *MockNVMe) DiscoverNVMeFCTargets(address string, login bool) ([]gonvme.NVMeTarget, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DiscoverNVMeFCTargets", address, login)
+	ret0, _ := ret[0].([]gonvme.NVMeTarget)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DiscoverNVMeFCTargets indicates an expected call of DiscoverNVMeFCTargets.
+func (mr *MockNVMeMockRecorder) DiscoverNVMeFCTargets(address, login interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverNVMeFCTargets", reflect.TypeOf((*MockNVMe)(nil).DiscoverNVMeFCTargets), address, login)
+}
+
+// DiscoverNVMeTCPTargets mocks base method.
+func (m *MockNVMe) DiscoverNVMeTCPTargets(address string, login bool) ([]gonvme.NVMeTarget, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DiscoverNVMeTCPTargets", address, login)
+	ret0, _ := ret[0].([]gonvme.NVMeTarget)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DiscoverNVMeTCPTargets indicates an expected call of DiscoverNVMeTCPTargets.
+func (mr *MockNVMeMockRecorder) DiscoverNVMeTCPTargets(address, login interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverNVMeTCPTargets", reflect.TypeOf((*MockNVMe)(nil).DiscoverNVMeTCPTargets), address, login)
+}
+
+// GetInitiators mocks base method.
+func (m *MockNVMe) GetInitiators(filename string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInitiators", filename)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInitiators indicates an expected call of GetInitiators.
+func (mr *MockNVMeMockRecorder) GetInitiators(filename interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInitiators", reflect.TypeOf((*MockNVMe)(nil).GetInitiators), filename)
+}
+
+// GetNVMeDeviceData mocks base method.
+func (m *MockNVMe) GetNVMeDeviceData(path string) (string, string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNVMeDeviceData", path)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(string)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetNVMeDeviceData indicates an expected call of GetNVMeDeviceData.
+func (mr *MockNVMeMockRecorder) GetNVMeDeviceData(path interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNVMeDeviceData", reflect.TypeOf((*MockNVMe)(nil).GetNVMeDeviceData), path)
+}
+
+// GetSessions mocks base method.
+func (m *MockNVMe) GetSessions() ([]gonvme.NVMESession, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSessions")
+	ret0, _ := ret[0].([]gonvme.NVMESession)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSessions indicates an expected call of GetSessions.
+func (mr *MockNVMeMockRecorder) GetSessions() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSessions", reflect.TypeOf((*MockNVMe)(nil).GetSessions))
+}
+
+// ListNVMeDeviceAndNamespace mocks base method.
+func (m *MockNVMe) ListNVMeDeviceAndNamespace() ([]gonvme.DevicePathAndNamespace, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListNVMeDeviceAndNamespace")
+	ret0, _ := ret[0].([]gonvme.DevicePathAndNamespace)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListNVMeDeviceAndNamespace indicates an expected call of ListNVMeDeviceAndNamespace.
+func (mr *MockNVMeMockRecorder) ListNVMeDeviceAndNamespace() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNVMeDeviceAndNamespace", reflect.TypeOf((*MockNVMe)(nil).ListNVMeDeviceAndNamespace))
+}
+
+// NVMeDisconnect mocks base method.
+func (m *MockNVMe) NVMeDisconnect(target gonvme.NVMeTarget) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NVMeDisconnect", target)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NVMeDisconnect indicates an expected call of NVMeDisconnect.
+func (mr *MockNVMeMockRecorder) NVMeDisconnect(target interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NVMeDisconnect", reflect.TypeOf((*MockNVMe)(nil).NVMeDisconnect), target)
+}
+
+// NVMeFCConnect mocks base method.
+func (m *MockNVMe) NVMeFCConnect(target gonvme.NVMeTarget, duplicateConnect bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NVMeFCConnect", target, duplicateConnect)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NVMeFCConnect indicates an expected call of NVMeFCConnect.
+func (mr *MockNVMeMockRecorder) NVMeFCConnect(target, duplicateConnect interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NVMeFCConnect", reflect.TypeOf((*MockNVMe)(nil).NVMeFCConnect), target, duplicateConnect)
+}
+
+// NVMeTCPConnect mocks base method.
+func (m *MockNVMe) NVMeTCPConnect(target gonvme.NVMeTarget, duplicateConnect bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NVMeTCPConnect", target, duplicateConnect)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NVMeTCPConnect indicates an expected call of NVMeTCPConnect.
+func (mr *MockNVMeMockRecorder) NVMeTCPConnect(target, duplicateConnect interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NVMeTCPConnect", reflect.TypeOf((*MockNVMe)(nil).NVMeTCPConnect), target, duplicateConnect)
 }

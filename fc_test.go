@@ -28,7 +28,9 @@ import (
 	intmultipath "github.com/dell/gobrick/internal/multipath"
 	intpowerpath "github.com/dell/gobrick/internal/powerpath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
+	"github.com/dell/gobrick/internal/wrappers"
 	wrp "github.com/dell/gobrick/internal/wrappers"
+	"github.com/dell/gobrick/pkg/scsi"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/semaphore"
@@ -1108,6 +1110,98 @@ func TestFCConnector_waitSingleDevice(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("FCConnector.waitSingleDevice() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestFCConnector_findHCTLsForFCHBA(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fcFields1 := getDefaultFCFields(ctrl)
+
+	type args struct {
+		ctx  context.Context
+		hba  FCHBA
+		info FCVolumeInfo
+	}
+	hba1 := FCHBA{
+		PortName:   "test",
+		NodeName:   "dasdasd",
+		HostDevice: "5",
+	}
+	tests := []struct {
+		name           string
+		fields         fcFields
+		args           args
+		want           []scsi.HCTL
+		want1          []scsi.HCTL
+		wantErr        bool
+		globMatches    []string
+		readFileData   [][]byte
+		readFileErrors []error
+	}{
+		{
+			name:   "success",
+			fields: fcFields1,
+			args: args{
+				ctx:  context.Background(),
+				hba:  hba1,
+				info: FCVolumeInfo{},
+			},
+			want:           []scsi.HCTL{},
+			want1:          []scsi.HCTL{},
+			wantErr:        false,
+			globMatches:    []string{"/sys/class/fc_transport/target5:1:2"},
+			readFileData:   [][]byte{[]byte("0x1234567890abcdef")},
+			readFileErrors: []error{nil},
+		},
+		{
+			name:   "glob error",
+			fields: fcFields1,
+			args: args{
+				ctx:  context.Background(),
+				hba:  hba1,
+				info: FCVolumeInfo{},
+			},
+			want:           nil,
+			want1:          nil,
+			wantErr:        true,
+			globMatches:    nil,
+			readFileData:   nil,
+			readFileErrors: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := &FCConnector{
+				baseConnector:             tt.fields.baseConnector,
+				multipath:                 tt.fields.multipath,
+				powerpath:                 tt.fields.powerpath,
+				scsi:                      tt.fields.scsi,
+				filePath:                  tt.fields.filePath,
+				os:                        tt.fields.os,
+				limiter:                   tt.fields.limiter,
+				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
+			}
+			if tt.globMatches != nil {
+				fc.filePath.(*wrappers.MockLimitedFilepath).EXPECT().Glob("/sys/class/fc_transport/target5:*").Return(tt.globMatches, nil)
+				for i, match := range tt.globMatches {
+					fc.os.(*wrappers.MockLimitedOS).EXPECT().ReadFile(match+"/port_name").Return(tt.readFileData[i], tt.readFileErrors[i])
+				}
+			} else {
+				fc.filePath.(*wrappers.MockLimitedFilepath).EXPECT().Glob("/sys/class/fc_transport/target5:*").Return(nil, errors.New("glob error"))
+			}
+
+			got, _, err := fc.findHCTLsForFCHBA(tt.args.ctx, tt.args.hba, tt.args.info)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("FCConnector.findHCTLsForFCHBA() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("FCConnector.findHCTLsForFCHBA() got = %v, want %v", got, tt.want)
+			}
+
 		})
 	}
 }

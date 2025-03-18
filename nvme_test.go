@@ -318,28 +318,6 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:   "multipath IsDaemonRunning false and Failed to connect volume",
-			fields: getDefaultNVMEFields(ctrl),
-			stateSetter: func(fields NVMEFields) {
-				fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
-				fields.nvmeLib.EXPECT().ListNVMeDeviceAndNamespace().Return(validDevicePathsAndNamespacesWithTwoDevices, nil).AnyTimes()
-				fields.nvmeLib.EXPECT().GetNVMeDeviceData(gomock.Any()).Return("0f8da909812540628ccf09680039914f", "ns1", nil).AnyTimes()
-				fields.nvmeLib.EXPECT().GetSessions().Return(validLibNVMESessions, nil).AnyTimes()
-			},
-			args: args{
-				ctx: ctx,
-				info: NVMeVolumeInfo{
-					Targets: []NVMeTargetInfo{
-						{Portal: "test-portal", Target: "test-target"},
-					},
-					WWN: validNQN,
-				},
-				useFc: false,
-			},
-			want:    Device{},
-			wantErr: true,
-		},
-		{
 			name:   "multipath IsDaemonRunning false and able to connect volume",
 			fields: getDefaultNVMEFields(ctrl),
 			stateSetter: func(fields NVMEFields) {

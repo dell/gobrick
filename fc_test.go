@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package gobrick
 
 import (
@@ -23,14 +24,13 @@ import (
 	"testing"
 	"time"
 
-	intpowerpath "github.com/dell/gobrick/internal/powerpath"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/dell/gobrick/internal/mockhelper"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
+	intpowerpath "github.com/dell/gobrick/internal/powerpath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -1069,6 +1069,45 @@ func TestWaitMultipathDevice(t *testing.T) {
 				assert.NoError(t, err)
 			}
 			assert.Equal(t, tt.expectedMpath, mpath)
+		})
+	}
+}
+
+func TestFCConnector_waitSingleDevice(t *testing.T) {
+	type args struct {
+		ctx     context.Context
+		wwn     string
+		devices []string
+	}
+	tests := []struct {
+		name    string
+		fc      *FCConnector
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "success",
+			fc:   &FCConnector{},
+			args: args{
+				ctx:     context.Background(),
+				wwn:     "wwn_test",
+				devices: []string{"device1", "device2"},
+			},
+			want:    "",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.fc.waitSingleDevice(tt.args.ctx, tt.args.wwn, tt.args.devices)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("FCConnector.waitSingleDevice() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("FCConnector.waitSingleDevice() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }

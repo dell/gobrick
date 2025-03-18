@@ -1201,7 +1201,6 @@ func TestFCConnector_findHCTLsForFCHBA(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("FCConnector.findHCTLsForFCHBA() got = %v, want %v", got, tt.want)
 			}
-
 		})
 	}
 }

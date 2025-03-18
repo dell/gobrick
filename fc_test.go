@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package gobrick
 
 import (
@@ -23,14 +24,15 @@ import (
 	"testing"
 	"time"
 
-	intpowerpath "github.com/dell/gobrick/internal/powerpath"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/dell/gobrick/internal/mockhelper"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
+	intpowerpath "github.com/dell/gobrick/internal/powerpath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
+	"github.com/dell/gobrick/internal/wrappers"
 	wrp "github.com/dell/gobrick/internal/wrappers"
+	"github.com/dell/gobrick/pkg/scsi"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -864,83 +866,6 @@ func TestConnectDevice(t *testing.T) {
 	}
 }
 
-// func TestWaitSingleDevice(t *testing.T) {
-// 	originalWaitUdevSymlinkFunc := waitUdevSymlinkFunc
-
-// 	defer func() {
-// 		waitUdevSymlinkFunc = originalWaitUdevSymlinkFunc
-// 	}()
-
-// 	type testCase struct {
-// 		name           string
-// 		setupMocks     func()
-// 		expectedError  string
-// 		expectedDevice string
-// 	}
-
-// 	testCases := []testCase{
-// 		{
-// 			name: "Successful wait for single device",
-// 			setupMocks: func() {
-// 				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
-// 					return func(_ context.Context, _, _ string) error {
-// 						return nil
-// 					}
-// 				}
-// 			},
-// 			expectedError:  "",
-// 			expectedDevice: "device1",
-// 		},
-// 		{
-// 			name: "Wait device canceled",
-// 			setupMocks: func() {
-// 				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
-// 					return func(_ context.Context, _, _ string) error {
-// 						return errors.New("udev symlink error")
-// 					}
-// 				}
-// 			},
-// 			expectedError:  "timeout waiting device for wwn test-wwn",
-// 			expectedDevice: "",
-// 		},
-// 		{
-// 			name: "Timeout waiting for device",
-// 			setupMocks: func() {
-// 				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
-// 					return func(_ context.Context, _, _ string) error {
-// 						return errors.New("udev symlink error")
-// 					}
-// 				}
-// 			},
-// 			expectedError:  "timeout waiting device for wwn test-wwn",
-// 			expectedDevice: "",
-// 		},
-// 	}
-
-// 	for _, tt := range testCases {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			if tt.setupMocks != nil {
-// 				tt.setupMocks()
-// 			}
-
-// 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-// 			defer cancel()
-
-// 			fc := &FCConnector{
-// 				waitDeviceRegisterTimeout: 1 * time.Second,
-// 			}
-// 			device, err := fc.waitSingleDevice(ctx, "test-wwn", []string{"device1", "device2"})
-
-// 			if tt.expectedError != "" {
-// 				assert.EqualError(t, err, tt.expectedError)
-// 			} else {
-// 				assert.NoError(t, err)
-// 			}
-// 			assert.Equal(t, tt.expectedDevice, device)
-// 		})
-// 	}
-// }
-
 func TestWaitMultipathDevice(t *testing.T) {
 	originalTraceFuncCallFunc := traceFuncCallFunc
 	originalAddWWIDFunc := addWWIDFunc
@@ -1069,6 +994,136 @@ func TestWaitMultipathDevice(t *testing.T) {
 				assert.NoError(t, err)
 			}
 			assert.Equal(t, tt.expectedMpath, mpath)
+		})
+	}
+}
+
+func TestFCConnector_waitSingleDevice(t *testing.T) {
+	type args struct {
+		ctx     context.Context
+		wwn     string
+		devices []string
+	}
+	tests := []struct {
+		name    string
+		fc      *FCConnector
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "success",
+			fc:   &FCConnector{},
+			args: args{
+				ctx:     context.Background(),
+				wwn:     "wwn_test",
+				devices: []string{"device1", "device2"},
+			},
+			want:    "",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.fc.waitSingleDevice(tt.args.ctx, tt.args.wwn, tt.args.devices)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("FCConnector.waitSingleDevice() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("FCConnector.waitSingleDevice() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFCConnector_findHCTLsForFCHBA(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fcFields1 := getDefaultFCFields(ctrl)
+
+	type args struct {
+		ctx  context.Context
+		hba  FCHBA
+		info FCVolumeInfo
+	}
+	hba1 := FCHBA{
+		PortName:   "test",
+		NodeName:   "dasdasd",
+		HostDevice: "5",
+	}
+	tests := []struct {
+		name           string
+		fields         fcFields
+		args           args
+		want           []scsi.HCTL
+		want1          []scsi.HCTL
+		wantErr        bool
+		globMatches    []string
+		readFileData   [][]byte
+		readFileErrors []error
+	}{
+		{
+			name:   "success",
+			fields: fcFields1,
+			args: args{
+				ctx:  context.Background(),
+				hba:  hba1,
+				info: FCVolumeInfo{},
+			},
+			want:           []scsi.HCTL{},
+			want1:          []scsi.HCTL{},
+			wantErr:        false,
+			globMatches:    []string{"/sys/class/fc_transport/target5:1:2"},
+			readFileData:   [][]byte{[]byte("0x1234567890abcdef")},
+			readFileErrors: []error{nil},
+		},
+		{
+			name:   "glob error",
+			fields: fcFields1,
+			args: args{
+				ctx:  context.Background(),
+				hba:  hba1,
+				info: FCVolumeInfo{},
+			},
+			want:           nil,
+			want1:          nil,
+			wantErr:        true,
+			globMatches:    nil,
+			readFileData:   nil,
+			readFileErrors: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := &FCConnector{
+				baseConnector:             tt.fields.baseConnector,
+				multipath:                 tt.fields.multipath,
+				powerpath:                 tt.fields.powerpath,
+				scsi:                      tt.fields.scsi,
+				filePath:                  tt.fields.filePath,
+				os:                        tt.fields.os,
+				limiter:                   tt.fields.limiter,
+				waitDeviceRegisterTimeout: tt.fields.waitDeviceRegisterTimeout,
+			}
+			if tt.globMatches != nil {
+				fc.filePath.(*wrappers.MockLimitedFilepath).EXPECT().Glob("/sys/class/fc_transport/target5:*").Return(tt.globMatches, nil)
+				for i, match := range tt.globMatches {
+					fc.os.(*wrappers.MockLimitedOS).EXPECT().ReadFile(match+"/port_name").Return(tt.readFileData[i], tt.readFileErrors[i])
+				}
+			} else {
+				fc.filePath.(*wrappers.MockLimitedFilepath).EXPECT().Glob("/sys/class/fc_transport/target5:*").Return(nil, errors.New("glob error"))
+			}
+
+			got, _, err := fc.findHCTLsForFCHBA(tt.args.ctx, tt.args.hba, tt.args.info)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("FCConnector.findHCTLsForFCHBA() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("FCConnector.findHCTLsForFCHBA() got = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }

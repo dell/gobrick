@@ -22,6 +22,7 @@ jobs:
     name: Dell Libraries Update
     secrets: inherit
   csm-release:
+    needs: [package-update]
     uses: dell/common-github-actions/.github/workflows/csm-release-libs.yaml@main
     name: Release Go Client Libraries
     with:

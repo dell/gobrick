@@ -1,7 +1,7 @@
 name: Release Gobrick
 # Invocable as a reusable workflow
 # Can be manually triggered
-on: # yamllint disable-line rule:truthy
+on:  # yamllint disable-line rule:truthy
   workflow_call:
   workflow_dispatch:
     inputs:
@@ -34,17 +34,17 @@ jobs:
         run: |
           if [[ "${{ github.event.inputs.version }}" != "" && "${{ github.event.inputs.option }}" == "n-1/n-2 patch (Provide input in the below box)" ]]; then
             # if both version and option are provided, then version takes precedence i.e. patch release for n-1/n-2
-            echo "versionEnv=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT            
+            echo "versionEnv=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
             exit 0
           fi
 
           if [[ "${{ github.event.inputs.option }}" != "n-1/n-2 patch (Provide input in the below box)" ]]; then
             # if only option is provided, then option takes precedence i.e. minor, major or patch release
-            echo "versionEnv=${{ github.event.inputs.option }}" >> $GITHUB_OUTPUT            
+            echo "versionEnv=${{ github.event.inputs.option }}" >> $GITHUB_OUTPUT
             exit 0
           fi          
           # if neither option nor version is provided, then minor release is taken by default (Auto-release)
-          echo "versionEnv=minor" >> $GITHUB_OUTPUT          
+          echo "versionEnv=minor" >> $GITHUB_OUTPUT
 
   # This job is to update the commits of the dependent libraries for Gobrick library
   package-update:
@@ -52,7 +52,7 @@ jobs:
     name: Dell Libraries Update
     secrets: inherit
   csm-release:
-    needs: [package-update, process-inputs]    
+    needs: [package-update, process-inputs]
     uses: dell/common-github-actions/.github/workflows/csm-release-libs.yaml@main
     name: Release Go Client Libraries
     with:

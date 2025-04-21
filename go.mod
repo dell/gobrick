@@ -5,8 +5,8 @@ go 1.24
 toolchain go1.24.1
 
 require (
-	github.com/dell/goiscsi v1.11.1-0.20250327070438-0d5eaba96f39
-	github.com/dell/gonvme v1.10.2-0.20250327070413-9877f9a59ca9
+	github.com/dell/goiscsi v1.11.1-0.20250414073142-a69a338c4871
+	github.com/dell/gonvme v1.10.2-0.20250414072949-5654e72314ec
 	github.com/golang/mock v1.6.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0

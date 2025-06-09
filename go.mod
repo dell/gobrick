@@ -2,7 +2,7 @@ module github.com/dell/gobrick
 
 go 1.24
 
-toolchain go1.24.2
+toolchain go1.24.3
 
 require (
 	github.com/dell/goiscsi v1.12.0

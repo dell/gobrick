@@ -6,7 +6,7 @@ toolchain go1.24.2
 
 require (
 	github.com/dell/goiscsi v1.12.0
-	github.com/dell/gonvme v1.11.0
+	github.com/dell/gonvme v1.11.1-0.20250623220042-71afc9447376
 	github.com/golang/mock v1.6.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0

@@ -18,7 +18,7 @@
 
 //go:generate ./generate_mock.sh
 
-package utils
+package gobrickutils
 
 import (
 	"errors"

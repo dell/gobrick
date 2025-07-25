@@ -28,7 +28,7 @@ import (
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
-	"github.com/dell/gobrick/pkg/utils"
+	"github.com/dell/gobrick/pkg/gobrickutils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -141,7 +141,7 @@ func (mp *Powerpath) flushDevice(ctx context.Context) error {
 }
 
 func (mp *Powerpath) runCommand(ctx context.Context, command string, args []string) ([]byte, error) {
-	err := utils.ValidateCommandInput(command)
+	err := gobrickutils.ValidateCommandInput(command)
 	if err != nil {
 		return nil, err
 	}

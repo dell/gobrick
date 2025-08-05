@@ -329,7 +329,7 @@ func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolume
 			return Device{}, errors.New("connectSingleDevice canceled")
 		default:
 		}
-		devices, nguid := readNVMeDevicesFromResultCH(devCH, devices)
+		devices, nguid := readNVMeDevicesFromResultCH(discoveryCtx, devCH, devices)
 		// check all discovery gorutines finished
 		if !discoveryComplete {
 			select {
@@ -403,7 +403,7 @@ func (c *NVMeConnector) connectMultipathDevice(
 		default:
 		}
 		if nguid == "" {
-			devices, nguid = readNVMeDevicesFromResultCH(devCH, devices)
+			devices, nguid = readNVMeDevicesFromResultCH(discoveryCtx, devCH, devices)
 		}
 
 		// check all discovery gorutines finished
@@ -612,9 +612,14 @@ func (c *NVMeConnector) tryNVMeConnect(ctx context.Context, info NVMeVolumeInfo,
 	return nil
 }
 
-func readNVMeDevicesFromResultCH(ch chan DevicePathResult, _ []string) ([]string, string) {
-	devicePathResult := <-ch
+func readNVMeDevicesFromResultCH(ctx context.Context, ch chan DevicePathResult, _ []string) ([]string, string) {
+	var devicePathResult DevicePathResult
 	var devicePaths []string
+	select {
+	case devicePathResult = <-ch:
+	case <-ctx.Done():
+		return devicePaths, ""
+	}
 	for _, dpath := range devicePathResult.devicePaths {
 		// modify dpath /dev/nvme0n1 -> nvme0n1
 		newpath := strings.ReplaceAll(dpath, "/dev/", "")

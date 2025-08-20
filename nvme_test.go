@@ -293,6 +293,29 @@ func TestNVME_Connector_ConnectVolume(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:   "nvme session but no disks",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				fields.multipath.EXPECT().AddPath(gomock.Any(), gomock.Any()).AnyTimes()
+				fields.nvmeLib.EXPECT().GetSessions().Return(validLibNVMESessions, nil).AnyTimes()
+				fields.nvmeLib.EXPECT().ListNVMeDeviceAndNamespace().Return([]gonvme.DevicePathAndNamespace{}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("naa.68ccf098000f8da9098125406239914f", nil).AnyTimes()
+				fields.scsi.EXPECT().WaitUdevSymlinkNVMe(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().CheckDeviceIsValid(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+			},
+			args: args{
+				ctx: ctx,
+				info: NVMeVolumeInfo{
+					Targets: []NVMeTargetInfo{validNVMETargetInfo1},
+					WWN:     "naa.68ccf098000f8da9098125406239914f",
+				},
+				useFc: false,
+			},
+			want:    Device{},
+			wantErr: true,
+		},
+		{
 			name:   "nvme session found and Device is not valid",
 			fields: getDefaultNVMEFields(ctrl),
 			stateSetter: func(fields NVMEFields) {
@@ -815,7 +838,7 @@ func TestNVME_readNVMeDevicesFromResultCH(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ch := make(chan DevicePathResult, 1)
 			ch <- tt.devicePathResult
-			gotPaths, gotNguid := readNVMeDevicesFromResultCH(ch, nil)
+			gotPaths, gotNguid := readNVMeDevicesFromResultCH(t.Context(), ch, nil)
 			if !reflect.DeepEqual(gotPaths, tt.expectedPaths) {
 				t.Errorf("readNVMeDevicesFromResultCH() gotPaths = %v, expectedPaths %v", gotPaths, tt.expectedPaths)
 			}

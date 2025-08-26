@@ -9,7 +9,7 @@ require (
 	github.com/dell/gonvme v1.11.1
 	github.com/golang/mock v1.6.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 	golang.org/x/sync v0.16.0
 )
 

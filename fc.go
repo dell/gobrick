@@ -182,6 +182,16 @@ func (fc *FCConnector) DisconnectVolume(ctx context.Context, info FCVolumeInfo) 
 	return fc.cleanConnection(ctx, false, info)
 }
 
+// DisconnectVolumeByWWN disconnects volume from a node by WWN
+func (fc *FCConnector) DisconnectVolumeByWWN(ctx context.Context, wwn string) error {
+	defer tracer.TraceFuncCall(ctx, "FCConnector.DisconnectVolumeByWWN")()
+	if err := fc.limiter.Acquire(ctx, 1); err != nil {
+		return errors.New("too many parallel operations. try later")
+	}
+	defer fc.limiter.Release(1)
+	return fc.baseConnector.disconnectDevicesByWWN(ctx, wwn)
+}
+
 // DisconnectVolumeByDeviceName disconnects volume from a node by device name
 func (fc *FCConnector) DisconnectVolumeByDeviceName(ctx context.Context, name string) error {
 	defer tracer.TraceFuncCall(ctx, "FCConnector.DisconnectVolumeByDeviceName")()

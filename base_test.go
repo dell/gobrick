@@ -515,6 +515,87 @@ func TestNewBaseConnector(t *testing.T) {
 	}
 }
 
+func TestDisconnectDevicesByWWN(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mp := intmultipath.NewMockMultipath(ctrl)
+	pp := intpowerpath.NewMockPowerpath(ctrl)
+	s := intscsi.NewMockSCSI(ctrl)
+
+	type args struct {
+		ctx context.Context
+		wwn string
+	}
+
+	tests := []struct {
+		name          string
+		args          args
+		setupMocks    func()
+		expectedError string
+	}{
+		{
+			name: "success",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567890",
+			},
+			setupMocks: func() {
+				mp.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil)
+				s.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true)
+				s.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil)
+			},
+			expectedError: "",
+		},
+		{
+			name: "error flushing device",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567890",
+			},
+			setupMocks: func() {
+				mp.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error"))
+			},
+			expectedError: "flush error",
+		},
+		{
+			name: "error deleting device",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567890",
+			},
+			setupMocks: func() {
+				mp.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil)
+				s.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true)
+				s.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(errors.New("delete error"))
+			},
+			expectedError: "delete error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bc := &baseConnector{
+				multipath: mp,
+				powerpath: pp,
+				scsi:      s,
+			}
+
+			tt.setupMocks()
+
+			err := bc.disconnectDevicesByWWN(tt.args.ctx, tt.args.wwn)
+
+			if err != nil && tt.expectedError == "" {
+				t.Errorf("expected no error, got %v", err)
+			} else if err == nil && tt.expectedError != "" {
+				t.Errorf("expected error %v, got nil", tt.expectedError)
+			} else if err != nil && tt.expectedError != "" && err.Error() != tt.expectedError {
+				t.Errorf("expected error %v, got %v", tt.expectedError, err)
+			}
+		})
+	}
+}
+
 func TestDisconnectDevicesByDeviceName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

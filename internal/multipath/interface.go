@@ -30,4 +30,6 @@ type Multipath interface {
 	RemoveDeviceFromWWIDSFile(ctx context.Context, wwid string) error
 	IsDaemonRunning(ctx context.Context) bool
 	GetDMWWID(ctx context.Context, deviceMapName string) (string, error)
+	GetMultipathNameAndPaths(ctx context.Context, wwid string) (string, []string, error)
+	GetMpathMinorByMpathName(ctx context.Context, mpath string) (string, bool, error)
 }

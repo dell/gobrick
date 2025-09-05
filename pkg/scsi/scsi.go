@@ -49,6 +49,7 @@ const (
 	maxRetryCount          = 10
 	NVMEMultipathSleepTime = 500
 	NVMESymlinkSleepTime   = 200
+	DmNotFoundErr          = "dm not found"
 )
 
 // NewSCSI initializes scsi struct
@@ -371,7 +372,7 @@ func (s *Scsi) getDMDeviceByChildren(ctx context.Context, devices []string) (str
 	if match != "" {
 		return match, nil
 	}
-	return "", errors.New("dm not found")
+	return "", errors.New(DmNotFoundErr)
 }
 
 // GetNVMEMultipathDMName finds the multipath DM mame for NVMe

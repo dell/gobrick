@@ -233,8 +233,8 @@ func (mp *Multipath) getMultipathNameAndPaths(ctx context.Context, wwid string) 
 			continue
 		}
 		if strings.Contains(fields[1], wwid) {
-			mpathName = fields[0]
-			sdPaths = append(sdPaths, fields[2])
+			mpathName = fields[2]
+			sdPaths = append(sdPaths, fields[0])
 		}
 	}
 	// Return the mpath name and sd paths

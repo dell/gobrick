@@ -20,11 +20,13 @@ package multipath
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
 
 	mh "github.com/dell/gobrick/internal/mockhelper"
+	"github.com/dell/gobrick/internal/wrappers"
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/golang/mock/gomock"
 )
@@ -635,6 +637,71 @@ func TestMultipath_RemoveDeviceFromWWIDSFile(t *testing.T) {
 			tt.stateSetter(tt.fields)
 			if err := mp.RemoveDeviceFromWWIDSFile(tt.args.ctx, tt.args.wwid); (err != nil) != tt.wantErr {
 				t.Errorf("Multipath.RemoveDeviceFromWWIDSFile() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestGetMultipathNameAndPaths(t *testing.T) {
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		name          string
+		fields        mpFields
+		wwid          string
+		expectedName  string
+		expectedPaths []string
+		expectedErr   error
+	}{
+		{
+			name:          "Successful call",
+			fields:        getDefaultMPFields(ctrl),
+			wwid:          "valid-wwid",
+			expectedName:  "mpath-name",
+			expectedPaths: []string{"path1", "path2"},
+			expectedErr:   nil,
+		},
+		{
+			name:          "Error call",
+			fields:        getDefaultMPFields(ctrl),
+			wwid:          "invalid-wwid",
+			expectedName:  "",
+			expectedPaths: nil,
+			expectedErr:   errors.New("error"),
+		},
+		{
+			name:          "Empty wwid",
+			fields:        getDefaultMPFields(ctrl),
+			wwid:          "",
+			expectedName:  "",
+			expectedPaths: nil,
+			expectedErr:   errors.New("wwid cannot be empty"),
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := wrappers.NewMockLimitedOSExecCmd(ctrl)
+
+			mp := &Multipath{
+				chroot:   tt.fields.chroot,
+				osexec:   tt.fields.osexec,
+				filePath: tt.fields.filePath,
+			}
+
+			tt.fields.osexec.EXPECT().CommandContext(gomock.Any(), gomock.Any(), gomock.Any()).Return(cmd)
+			cmd.EXPECT().CombinedOutput().Return([]byte("sdb 360000970000120001598533030384533 mpatha\n"), nil)
+			name, paths, err := mp.GetMultipathNameAndPaths(context.Background(), tt.wwid)
+			if err != tt.expectedErr {
+				t.Errorf("getMultipathNameAndPaths returned error: %v, expected: %v", err, tt.expectedErr)
+			}
+			if name != tt.expectedName {
+				t.Errorf("getMultipathNameAndPaths returned incorrect name: %s, expected: %s", name, tt.expectedName)
+			}
+			if !reflect.DeepEqual(paths, tt.expectedPaths) {
+				t.Errorf("getMultipathNameAndPaths returned incorrect paths: %v, expected: %v", paths, tt.expectedPaths)
 			}
 		})
 	}

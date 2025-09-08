@@ -249,7 +249,7 @@ func (bc *baseConnector) cleanNVMeDevices(ctx context.Context,
 }
 
 func (bc *baseConnector) cleanDevicesByMpathInfo(ctx context.Context, force bool, req *cleanVolumeReq) error {
-	defer tracer.TraceFuncCall(ctx, "baseConnector.cleanDevicesOnReq")()
+	defer tracer.TraceFuncCall(ctx, "baseConnector.cleanDevicesByMpathInfo")()
 	logger.Info(ctx, "cleanup started for: %+v", *req)
 	if req.mpathName != "" {
 		err := bc.cleanMultipathDeviceByName(ctx, req.mpathName)

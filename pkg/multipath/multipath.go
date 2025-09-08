@@ -36,6 +36,7 @@ const (
 	multipathTool   = "multipath"
 	multipathDaemon = "multipathd"
 	dmsetupTool     = "dmsetup"
+	chroot          = "chroot"
 )
 
 // NewMultipath initializes multipath struct
@@ -208,8 +209,9 @@ func (mp *Multipath) getMultipathNameAndPaths(ctx context.Context, wwid string) 
 	var output string
 	var data []byte
 	var err error
+
 	if mp.chroot != "" {
-		data, err = mp.osexec.CommandContext(ctx, mp.chroot, multipathDaemon, "show", "paths", "raw", "format", "%d %w %m").CombinedOutput()
+		data, err = mp.osexec.CommandContext(ctx, chroot, mp.chroot, multipathDaemon, "show", "paths", "raw", "format", "%d %w %m").CombinedOutput()
 	} else {
 		data, err = mp.osexec.CommandContext(ctx, multipathDaemon, "show", "paths", "raw", "format", "%d %w %m").CombinedOutput()
 	}
@@ -275,7 +277,7 @@ func (mp *Multipath) runCommand(ctx context.Context, command string, args []stri
 
 	if mp.chroot != "" {
 		args = append([]string{mp.chroot, command}, args...)
-		command = "chroot"
+		command = chroot
 	}
 	logger.
 		Info(ctx, "multipath command: %s args: %s", command, strings.Join(args, " "))

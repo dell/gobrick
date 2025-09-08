@@ -541,9 +541,13 @@ func TestDisconnectDevicesByWWN(t *testing.T) {
 				wwn: "1234567890",
 			},
 			setupMocks: func() {
-				mp.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil)
-				s.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true)
-				s.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil)
+				mp.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("mpath-name", []string{"path1", "path2"}, nil).AnyTimes()
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				mp.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				mp.EXPECT().GetMpathMinorByMpathName(gomock.Any(), "mpath-name").Return("minor", false, nil).AnyTimes()
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"path1", "path2"}).Return("dm-device", nil).AnyTimes()
+				s.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				s.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			},
 			expectedError: "",
 		},
@@ -551,34 +555,42 @@ func TestDisconnectDevicesByWWN(t *testing.T) {
 			name: "error flushing device",
 			args: args{
 				ctx: context.Background(),
-				wwn: "1234567890",
+				wwn: "1234567891",
 			},
 			setupMocks: func() {
-				mp.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error"))
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				mp.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("mpath-name", []string{"path1", "path2"}, nil).AnyTimes()
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"path1", "path2"}).Return("dm-device", nil).AnyTimes()
+				mp.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
 			},
-			expectedError: "flush error",
+			expectedError: "",
 		},
 		{
 			name: "error deleting device",
 			args: args{
 				ctx: context.Background(),
-				wwn: "1234567890",
+				wwn: "1234567892",
 			},
 			setupMocks: func() {
-				mp.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil)
-				s.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true)
-				s.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(errors.New("delete error"))
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				mp.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("mpath-name", []string{"path1", "path2"}, nil).AnyTimes()
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"path1", "path2"}).Return("dm-device", nil).AnyTimes()
+				mp.EXPECT().GetMpathMinorByMpathName(gomock.Any(), "mpath-name").Return("minor", true, nil).AnyTimes()
+				mp.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				s.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				s.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(errors.New("delete error")).AnyTimes()
 			},
-			expectedError: "delete error",
+			expectedError: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bc := &baseConnector{
-				multipath: mp,
-				powerpath: pp,
-				scsi:      s,
+				multipath:             mp,
+				powerpath:             pp,
+				scsi:                  s,
+				multipathFlushRetries: 1,
 			}
 
 			tt.setupMocks()

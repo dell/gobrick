@@ -30,5 +30,4 @@ dev, err := connector.ConnectVolume(context.Background(),
 				 Target: "iqn.2015-10.com.dell:dellemc-array-fnm00185000782-b-5dc4fceb"}}})
 
 err = connector.DisconnectVolumeByDeviceName(context.Background(), "dm-1")
-
 ```

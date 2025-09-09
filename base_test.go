@@ -18,6 +18,7 @@ package gobrick
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -956,6 +957,113 @@ func TestGetNVMEDMWWN(t *testing.T) {
 
 			if wwn != test.expectedWWN {
 				t.Errorf("getNVMEDMWWN() = %v, want %v", wwn, test.expectedWWN)
+			}
+		})
+	}
+}
+
+func TestIdentifyDevicesForWWN(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupMocks func(m *intmultipath.MockMultipath, s *intscsi.MockSCSI)
+		wwn        string
+		want       *cleanVolumeReq
+		wantErr    bool
+	}{
+		{
+			name: "orphan multipath device",
+			setupMocks: func(m *intmultipath.MockMultipath, s *intscsi.MockSCSI) {
+				m.EXPECT().GetMultipathNameAndPaths(gomock.Any(), "test-wwn").Return("orphan-mpath-name", []string{"path1", "path2"}, nil)
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("dm-device", nil)
+			},
+			wwn: "test-wwn",
+			want: &cleanVolumeReq{
+				wwn:       "test-wwn",
+				sdDisks:   []string{"path1", "path2"},
+				mpathName: "",
+				dmName:    "dm-device",
+			},
+			wantErr: false,
+		},
+		{
+			name: "Error Getting Multipath name and paths",
+			setupMocks: func(m *intmultipath.MockMultipath, s *intscsi.MockSCSI) {
+				m.EXPECT().GetMultipathNameAndPaths(gomock.Any(), "test-wwn").Return("", []string{}, errors.New("failed to get multipath name"))
+			},
+			wwn:     "test-wwn",
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "No Device mapper found",
+			setupMocks: func(m *intmultipath.MockMultipath, s *intscsi.MockSCSI) {
+				m.EXPECT().GetMultipathNameAndPaths(gomock.Any(), "test-wwn").Return("mpath-name", []string{"path1", "path2"}, nil)
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("dm not found"))
+			},
+			wwn: "test-wwn",
+			want: &cleanVolumeReq{
+				wwn:       "test-wwn",
+				sdDisks:   []string{"path1", "path2"},
+				mpathName: "mpath-name",
+				dmName:    "",
+			},
+			wantErr: false,
+		},
+		{
+			name: "No Device mapper found",
+			setupMocks: func(m *intmultipath.MockMultipath, s *intscsi.MockSCSI) {
+				m.EXPECT().GetMultipathNameAndPaths(gomock.Any(), "test-wwn").Return("mpath-name", []string{"path1", "path2"}, nil)
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("failed to get device mapper name"))
+			},
+			wwn:     "test-wwn",
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "length of WWN sddisks is zero with error",
+			setupMocks: func(m *intmultipath.MockMultipath, s *intscsi.MockSCSI) {
+				m.EXPECT().GetMultipathNameAndPaths(gomock.Any(), "test-wwn").Return("mpath-name", []string{}, nil)
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("dm-device", nil)
+				s.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to find devices by wwn"))
+			},
+			wwn:     "test-wwn",
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "length of WWN sddisks is zero without error",
+			setupMocks: func(m *intmultipath.MockMultipath, s *intscsi.MockSCSI) {
+				m.EXPECT().GetMultipathNameAndPaths(gomock.Any(), "test-wwn").Return("mpath-name", []string{}, nil)
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("dm-device", nil)
+				s.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, nil)
+			},
+			wwn:     "test-wwn",
+			want:    nil,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			m := intmultipath.NewMockMultipath(ctrl)
+			s := intscsi.NewMockSCSI(ctrl)
+
+			tt.setupMocks(m, s)
+
+			bc := &baseConnector{
+				multipath: m,
+				scsi:      s,
+			}
+
+			got, err := bc.identifyDevicesForWWN(context.Background(), tt.wwn)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("identifyDevicesForWWN() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("identifyDevicesForWWN() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

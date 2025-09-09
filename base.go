@@ -117,7 +117,8 @@ func (bc *baseConnector) identifyDevicesForWWN(ctx context.Context, wwn string) 
 	if len(sdDisks) == 0 {
 		// there is no multipath device, and we could not retrieve sdDisks
 		// check if we have sdDisks for the wwn
-		sdDisks, err := bc.scsi.GetDevicesByWWN(ctx, wwn)
+		// append a 3 to wwn for formatting for scsi devices
+		sdDisks, err := bc.scsi.GetDevicesByWWN(ctx, fmt.Sprintf("3%s", wwn))
 		if err != nil {
 			logger.Error(ctx, "failed to find devices by wwn: %s", err.Error())
 			return nil, err
@@ -151,7 +152,8 @@ func (bc *baseConnector) disconnectDevicesByWWN(ctx context.Context, wwn string)
 		return bc.cleanDevicesByMpathInfo(ctx, false, mpathInfo)
 	}
 	// multipath is not running, check if we have sdDisks for the wwn
-	devices, err := bc.scsi.GetDevicesByWWN(ctx, wwn)
+	// append a 3 to wwn for formatting for scsi devices
+	devices, err := bc.scsi.GetDevicesByWWN(ctx, fmt.Sprintf("3%s", wwn))
 	if err != nil {
 		logger.Error(ctx, "failed to find devices by wwn: %s", err.Error())
 		return err

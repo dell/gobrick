@@ -162,7 +162,7 @@ func (bc *baseConnector) disconnectDevicesByWWN(ctx context.Context, wwn string)
 			logger.Error(ctx, "can't delete block device: %s", err.Error())
 			return err
 		}
-		logger.Debug(ctx, "%d. %s disk deleted for %s", i+1, d)
+		logger.Debug(ctx, "%d. %s disk deleted for %s", i+1, d, wwn)
 	}
 	logger.Debug(ctx, "clean devices completed for %s", wwn)
 	return nil
@@ -295,7 +295,7 @@ func (bc *baseConnector) cleanDevicesByMpathInfo(ctx context.Context, force bool
 				return err
 			}
 		}
-		logger.Debug(ctx, "%d. %s disk deleted for %s", i+1, d)
+		logger.Debug(ctx, "%d. %s disk deleted for %s", i+1, d, req.wwn)
 
 	}
 	logger.Debug(ctx, "clean devices completed for %s, mpath: %s", req.wwn, req.mpathName)

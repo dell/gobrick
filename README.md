@@ -1,5 +1,5 @@
 # :lock: **Important Notice**
-Starting with the release of **Container Storage Modules v1.16.0**, this repository will transition to a closed source model. This change reflects our commitment to delivering even greater value to our customers by enabling faster innovation and more deeply integrated features with the Dell storage portfolio.<br>
+Starting with the release of **Container Storage Modules v1.16.0**, this repository will no longer be maintained as an open source project. Future development will continue under a closed source model. This change reflects our commitment to delivering even greater value to our customers by enabling faster innovation and more deeply integrated features with the Dell storage portfolio.<br>
 For existing customers using Dell’s Container Storage Modules, you will continue to receive:
 * **Ongoing Support & Community Engagement**<br>
        You will continue to receive high-quality support through Dell Support and our community channels. Your experience of engaging with the Dell community remains unchanged.
@@ -30,4 +30,5 @@ dev, err := connector.ConnectVolume(context.Background(),
 				 Target: "iqn.2015-10.com.dell:dellemc-array-fnm00185000782-b-5dc4fceb"}}})
 
 err = connector.DisconnectVolumeByDeviceName(context.Background(), "dm-1")
+
 ```

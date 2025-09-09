@@ -523,6 +523,13 @@ func TestDisconnectDevicesByWWN(t *testing.T) {
 	pp := intpowerpath.NewMockPowerpath(ctrl)
 	s := intscsi.NewMockSCSI(ctrl)
 
+	bc := &baseConnector{
+		multipath:             mp,
+		powerpath:             pp,
+		scsi:                  s,
+		multipathFlushRetries: 1,
+	}
+
 	type args struct {
 		ctx context.Context
 		wwn string
@@ -543,6 +550,23 @@ func TestDisconnectDevicesByWWN(t *testing.T) {
 			setupMocks: func() {
 				mp.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("mpath-name", []string{"path1", "path2"}, nil).AnyTimes()
 				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				mp.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				mp.EXPECT().GetMpathMinorByMpathName(gomock.Any(), "mpath-name").Return("minor", false, nil).AnyTimes()
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"path1", "path2"}).Return("dm-device", nil).AnyTimes()
+				s.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				s.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			expectedError: "",
+		},
+		{
+			name: "Success when daemon is not running",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567893",
+			},
+			setupMocks: func() {
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+				s.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{"path1", "path2"}, nil).AnyTimes()
 				mp.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				mp.EXPECT().GetMpathMinorByMpathName(gomock.Any(), "mpath-name").Return("minor", false, nil).AnyTimes()
 				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"path1", "path2"}).Return("dm-device", nil).AnyTimes()
@@ -586,12 +610,6 @@ func TestDisconnectDevicesByWWN(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bc := &baseConnector{
-				multipath:             mp,
-				powerpath:             pp,
-				scsi:                  s,
-				multipathFlushRetries: 1,
-			}
 
 			tt.setupMocks()
 

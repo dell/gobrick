@@ -156,7 +156,16 @@ func (bc *baseConnector) disconnectDevicesByWWN(ctx context.Context, wwn string)
 		logger.Error(ctx, "failed to find devices by wwn: %s", err.Error())
 		return err
 	}
-	return bc.cleanDevices(ctx, false, devices, wwn)
+	for i, d := range devices {
+		err := bc.scsi.DeleteSCSIDeviceByName(ctx, d)
+		if err != nil {
+			logger.Error(ctx, "can't delete block device: %s", err.Error())
+			return err
+		}
+		logger.Debug(ctx, "%d. %s disk deleted for %s", i+1, d)
+	}
+	logger.Debug(ctx, "clean devices completed for %s", wwn)
+	return nil
 }
 
 func (bc *baseConnector) disconnectDevicesByDeviceName(ctx context.Context, name string) error {
@@ -278,7 +287,7 @@ func (bc *baseConnector) cleanDevicesByMpathInfo(ctx context.Context, force bool
 	} else {
 		logger.Debug(ctx, "No multipath map found for %s; continuing to sd path deletion", req.wwn)
 	}
-	for _, d := range req.sdDisks {
+	for i, d := range req.sdDisks {
 		err := bc.scsi.DeleteSCSIDeviceByName(ctx, d)
 		if err != nil {
 			logger.Error(ctx, "can't delete block device: %s", err.Error())
@@ -286,7 +295,8 @@ func (bc *baseConnector) cleanDevicesByMpathInfo(ctx context.Context, force bool
 				return err
 			}
 		}
-		logger.Debug(ctx, "%d devices deleted for %s", len(req.sdDisks), req.mpathName)
+		logger.Debug(ctx, "%d. %s disk deleted for %s", i+1, d)
+
 	}
 	logger.Debug(ctx, "clean devices completed for %s, mpath: %s", req.wwn, req.mpathName)
 	return nil

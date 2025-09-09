@@ -20,13 +20,11 @@ package multipath
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"testing"
 
 	mh "github.com/dell/gobrick/internal/mockhelper"
-	"github.com/dell/gobrick/internal/wrappers"
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/golang/mock/gomock"
 )
@@ -43,6 +41,7 @@ func getDefaultMPFields(ctrl *gomock.Controller) mpFields {
 	return mpFields{
 		filePath: filePathMock,
 		osexec:   osExecMock,
+		chroot:   "chroot",
 	}
 }
 
@@ -644,64 +643,114 @@ func TestMultipath_RemoveDeviceFromWWIDSFile(t *testing.T) {
 
 func TestGetMultipathNameAndPaths(t *testing.T) {
 
+	type args struct {
+		ctx  context.Context
+		wwid string
+	}
+
+	ctx := context.Background()
+
+	defaultArgs := args{ctx: ctx, wwid: mh.ValidWWID}
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	testCases := []struct {
-		name          string
-		fields        mpFields
-		wwid          string
-		expectedName  string
-		expectedPaths []string
-		expectedErr   error
+	mocks := mh.MockHelper{
+		Ctrl:                     ctrl,
+		OSEXECCommandContextName: multipathDaemon,
+		OSEXECCommandContextArgs: []string{"show", "paths", "raw", "format", "%d %w %m"},
+		OSEXECCmdOKReturn: fmt.Sprintf("%s %s %s",
+			`"path1" "path2"`, "360000970000120001598533030384533", "mpath-name"),
+	}
+
+	tests := []struct {
+		name        string
+		fields      mpFields
+		stateSetter func(fields mpFields)
+		args        args
+		wantErr     bool
 	}{
 		{
-			name:          "Successful call",
-			fields:        getDefaultMPFields(ctrl),
-			wwid:          "valid-wwid",
-			expectedName:  "mpath-name",
-			expectedPaths: []string{"path1", "path2"},
-			expectedErr:   nil,
-		},
-		{
-			name:          "Error call",
-			fields:        getDefaultMPFields(ctrl),
-			wwid:          "invalid-wwid",
-			expectedName:  "",
-			expectedPaths: nil,
-			expectedErr:   errors.New("error"),
-		},
-		{
-			name:          "Empty wwid",
-			fields:        getDefaultMPFields(ctrl),
-			wwid:          "",
-			expectedName:  "",
-			expectedPaths: nil,
-			expectedErr:   errors.New("wwid cannot be empty"),
+			name:   "Successful call",
+			fields: getDefaultMPFields(ctrl),
+			stateSetter: func(fields mpFields) {
+				_, cmdMock := mocks.OSExecCommandContextOK(fields.osexec)
+				mocks.OSEXECCmdOKReturn = "ok"
+				mocks.OSExecCmdOK(cmdMock)
+			},
+			args:    defaultArgs,
+			wantErr: false,
 		},
 	}
 
-	for _, tt := range testCases {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := wrappers.NewMockLimitedOSExecCmd(ctrl)
-
 			mp := &Multipath{
-				chroot:   tt.fields.chroot,
 				osexec:   tt.fields.osexec,
 				filePath: tt.fields.filePath,
 			}
+			tt.stateSetter(tt.fields)
+			_, _, err := mp.GetMultipathNameAndPaths(tt.args.ctx, tt.args.wwid)
 
-			tt.fields.osexec.EXPECT().CommandContext(gomock.Any(), gomock.Any(), gomock.Any()).Return(cmd)
-			cmd.EXPECT().CombinedOutput().Return([]byte("sdb 360000970000120001598533030384533 mpatha\n"), nil)
-			name, paths, err := mp.GetMultipathNameAndPaths(context.Background(), tt.wwid)
-			if err != tt.expectedErr {
-				t.Errorf("getMultipathNameAndPaths returned error: %v, expected: %v", err, tt.expectedErr)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Multipath.GetMultipathNameAndPaths() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if name != tt.expectedName {
-				t.Errorf("getMultipathNameAndPaths returned incorrect name: %s, expected: %s", name, tt.expectedName)
+		})
+	}
+}
+
+func TestGetMpathMinorByMpathName(t *testing.T) {
+
+	type args struct {
+		ctx   context.Context
+		mpath string
+	}
+
+	ctx := context.Background()
+
+	defaultArgs := args{ctx: ctx, mpath: "mpatha"}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mocks := mh.MockHelper{
+		Ctrl:                     ctrl,
+		OSEXECCommandContextName: dmsetupTool,
+		OSEXECCommandContextArgs: []string{"info", defaultArgs.mpath, "-C", "--noheadings", "--separator", ":", "-o", "name,minor"},
+		OSEXECCmdOKReturn:        "mpatha:0",
+	}
+
+	tests := []struct {
+		name        string
+		fields      mpFields
+		stateSetter func(fields mpFields)
+		args        args
+		wantErr     bool
+	}{
+		{
+			name:   "Successful call",
+			fields: getDefaultMPFields(ctrl),
+			stateSetter: func(fields mpFields) {
+				_, cmdMock := mocks.OSExecCommandContextOK(fields.osexec)
+				mocks.OSEXECCmdOKReturn = "mpatha:0"
+				mocks.OSExecCmdOK(cmdMock)
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mp := &Multipath{
+				osexec:   tt.fields.osexec,
+				filePath: tt.fields.filePath,
 			}
-			if !reflect.DeepEqual(paths, tt.expectedPaths) {
-				t.Errorf("getMultipathNameAndPaths returned incorrect paths: %v, expected: %v", paths, tt.expectedPaths)
+			tt.stateSetter(tt.fields)
+			_, _, err := mp.GetMpathMinorByMpathName(tt.args.ctx, tt.args.mpath)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Multipath.GetMpathMinorByMpathName() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

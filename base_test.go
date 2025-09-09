@@ -610,7 +610,6 @@ func TestDisconnectDevicesByWWN(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			tt.setupMocks()
 
 			err := bc.disconnectDevicesByWWN(tt.args.ctx, tt.args.wwn)
@@ -668,7 +667,6 @@ func TestDisconnectDevicesByWWNNoMultipathError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			tt.setupMocks()
 
 			err := bc.disconnectDevicesByWWN(tt.args.ctx, tt.args.wwn)
@@ -683,6 +681,7 @@ func TestDisconnectDevicesByWWNNoMultipathError(t *testing.T) {
 		})
 	}
 }
+
 func TestDisconnectDevicesByWWNNoMultipathSuccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -726,7 +725,6 @@ func TestDisconnectDevicesByWWNNoMultipathSuccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			tt.setupMocks()
 
 			err := bc.disconnectDevicesByWWN(tt.args.ctx, tt.args.wwn)
@@ -741,6 +739,7 @@ func TestDisconnectDevicesByWWNNoMultipathSuccess(t *testing.T) {
 		})
 	}
 }
+
 func TestDisconnectDevicesByDeviceName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -910,6 +909,7 @@ func TestCleanDevicesByMpathInfo(t *testing.T) {
 		})
 	}
 }
+
 func TestCleanNVMeDevices(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1192,7 +1192,7 @@ func TestIdentifyDevicesForWWN(t *testing.T) {
 		},
 		{
 			name: "Error Getting Multipath name and paths",
-			setupMocks: func(m *intmultipath.MockMultipath, s *intscsi.MockSCSI) {
+			setupMocks: func(m *intmultipath.MockMultipath, _ *intscsi.MockSCSI) {
 				m.EXPECT().GetMultipathNameAndPaths(gomock.Any(), "test-wwn").Return("", []string{}, errors.New("failed to get multipath name"))
 			},
 			wwn:     "test-wwn",

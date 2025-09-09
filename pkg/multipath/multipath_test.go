@@ -642,7 +642,6 @@ func TestMultipath_RemoveDeviceFromWWIDSFile(t *testing.T) {
 }
 
 func TestGetMultipathNameAndPaths(t *testing.T) {
-
 	type args struct {
 		ctx  context.Context
 		wwid string
@@ -700,7 +699,6 @@ func TestGetMultipathNameAndPaths(t *testing.T) {
 }
 
 func TestGetMpathMinorByMpathName(t *testing.T) {
-
 	type args struct {
 		ctx   context.Context
 		mpath string

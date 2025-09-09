@@ -35,6 +35,8 @@ import (
 const (
 	multipathTool   = "multipath"
 	multipathDaemon = "multipathd"
+	dmsetupTool     = "dmsetup"
+	chroot          = "chroot"
 )
 
 // NewMultipath initializes multipath struct
@@ -49,10 +51,14 @@ func NewMultipath(chroot string) *Multipath {
 
 // Multipath defines implementation of LimitedOSExec and LimitedFile path interfaces
 type Multipath struct {
-	chroot string
-
+	chroot   string
 	osexec   wrp.LimitedOSExec
 	filePath wrp.LimitedFilepath
+}
+
+func (mp *Multipath) GetMultipathNameAndPaths(ctx context.Context, wwid string) (string, []string, error) {
+	defer tracer.TraceFuncCall(ctx, "multipath.GetMultipathNameAndPaths")()
+	return mp.getMultipathNameAndPaths(ctx, wwid)
 }
 
 // AddWWID add wwid to the list of know multipath wwids.
@@ -91,6 +97,11 @@ func (mp *Multipath) FlushDevice(ctx context.Context, deviceMapName string) erro
 func (mp *Multipath) RemoveDeviceFromWWIDSFile(ctx context.Context, wwid string) error {
 	defer tracer.TraceFuncCall(ctx, "multipath.RemoveDeviceFromWWIDSFile")()
 	return mp.removeDeviceFromWWIDSFile(ctx, wwid)
+}
+
+func (mp *Multipath) GetMpathMinorByMpathName(ctx context.Context, mpath string) (string, bool, error) {
+	defer tracer.TraceFuncCall(ctx, "multipath.GetGetMpathMinorByMpathName")()
+	return mp.getMpathMinorByMpathName(ctx, mpath)
 }
 
 // IsDaemonRunning check if multipath daemon running
@@ -193,6 +204,71 @@ func (mp *Multipath) getDMWWID(ctx context.Context, deviceMapName string) (strin
 	return "", errors.New(msg)
 }
 
+func (mp *Multipath) getMultipathNameAndPaths(ctx context.Context, wwid string) (string, []string, error) {
+	// Run the multipathd show paths command with raw format and grep for the wwn
+	var output string
+	var data []byte
+	var err error
+
+	if mp.chroot != "" {
+		data, err = mp.osexec.CommandContext(ctx, chroot, mp.chroot, multipathDaemon, "show", "paths", "raw", "format", "%d %w %m").CombinedOutput()
+	} else {
+		data, err = mp.osexec.CommandContext(ctx, multipathDaemon, "show", "paths", "raw", "format", "%d %w %m").CombinedOutput()
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	// Split the output into lines
+	output = string(data)
+
+	// Initialize variables to store the mpath name and sd paths
+	mpathName := ""
+	sdPaths := []string{}
+
+	// Iterate over the lines and filter based on the wwn
+	// sdb 360000970000120001598533030384533 mpatha
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Split(line, " ")
+		if len(fields) < 3 {
+			continue
+		}
+		if strings.Contains(fields[1], wwid) {
+			mpathName = fields[2]
+			sdPaths = append(sdPaths, fields[0])
+		}
+	}
+	// Return the mpath name and sd paths
+	return mpathName, sdPaths, nil
+}
+
+// getMpathMinorByMpathName returns a minor number, existence of minor and error
+// For a given mpath=mpathxb, this returns minor: dm-85, existence: true, err: nil
+// For a non-existing mpath, this return minor: "", existence: false, err: nil
+func (mp *Multipath) getMpathMinorByMpathName(ctx context.Context, mpath string) (string, bool, error) {
+	var output string
+	data, err := mp.runCommand(ctx, dmsetupTool, []string{"info", mpath, "-C", "--noheadings", "--separator", ":", "-o", "name,minor"})
+	// Split the output into lines
+	output = string(data)
+	if err != nil {
+		// if output contains "does not exist", return false without error
+		if strings.Contains(output, "does not exist") {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	// Initialize variables to store the mpath name and sd paths
+	minor := ""
+
+	// Iterate over the lines and filter based on the wwn
+	fields := strings.Split(output, ":")
+	if len(fields) > 2 {
+		return minor, false, fmt.Errorf("unexpected output format")
+	}
+
+	minor = fmt.Sprintf("dm-%s", fields[1])
+	return minor, true, nil
+}
+
 func (mp *Multipath) runCommand(ctx context.Context, command string, args []string) ([]byte, error) {
 	err := gobrickutils.ValidateCommandInput(command)
 	if err != nil {
@@ -201,7 +277,7 @@ func (mp *Multipath) runCommand(ctx context.Context, command string, args []stri
 
 	if mp.chroot != "" {
 		args = append([]string{mp.chroot, command}, args...)
-		command = "chroot"
+		command = chroot
 	}
 	logger.
 		Info(ctx, "multipath command: %s args: %s", command, strings.Join(args, " "))

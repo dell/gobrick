@@ -1,6 +1,6 @@
 /*
  *
- * Copyright © 2022 Dell Inc. or its subsidiaries. All Rights Reserved.
+ * Copyright © 2022-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -161,8 +161,9 @@ type NVMeConnector struct {
 
 // NVMeTargetInfo - Placeholder for NVMe targets
 type NVMeTargetInfo struct {
-	Portal string
-	Target string
+	Portal    string
+	Target    string
+	NetworkID string
 }
 
 // NVMeVolumeInfo - placeholder for NVMe volume
@@ -561,9 +562,7 @@ func (c *NVMeConnector) wwnMatches(nguid, wwn string) bool {
 	}
 
 	wwn = strings.ToLower(wwn)
-	if strings.HasPrefix(wwn, "naa.") {
-		wwn = wwn[4:]
-	}
+	wwn = strings.TrimPrefix(wwn, "naa.")
 
 	var token1, token2 string
 	if strings.HasPrefix(wwn, PowerStoreOUIPrefix) {
@@ -580,6 +579,8 @@ func (c *NVMeConnector) wwnMatches(nguid, wwn string) bool {
 		if strings.HasPrefix(nguid, token1+token2) {
 			return true
 		}
+	} else {
+		return strings.EqualFold(nguid, wwn)
 	}
 
 	return false

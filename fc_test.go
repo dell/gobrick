@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"reflect"
 	"testing"
 	"time"
@@ -60,6 +61,15 @@ type fcFields struct {
 	limiter                   *semaphore.Weighted
 	waitDeviceRegisterTimeout time.Duration
 }
+
+type fakeDirFileInfo struct{ name string }
+
+func (f fakeDirFileInfo) Name() string       { return f.name }
+func (f fakeDirFileInfo) Size() int64        { return 0 }
+func (f fakeDirFileInfo) Mode() fs.FileMode  { return fs.ModeDir }
+func (f fakeDirFileInfo) ModTime() time.Time { return time.Time{} }
+func (f fakeDirFileInfo) IsDir() bool        { return true }
+func (f fakeDirFileInfo) Sys() any           { return nil }
 
 func getDefaultFCFields(ctrl *gomock.Controller) fcFields {
 	con := NewFCConnector(FCConnectorParams{})
@@ -123,8 +133,21 @@ func waitForDeviceWWNMock(mock *baseMockHelper,
 ) {
 	findHCTLsForFCHBAMock(mock, filepath, os)
 
+	// First round: all return error
 	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1
 	mock.SCSIGetDeviceNameByHCTLErr(scsi)
+	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL2
+	mock.SCSIGetDeviceNameByHCTLErr(scsi)
+	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1Target1
+	mock.SCSIGetDeviceNameByHCTLErr(scsi)
+
+	// Simulate re-scan
+	findHCTLsForFCHBAMock(mock, filepath, os)
+
+	// Second round
+	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1
+	mock.SCSIGetDeviceNameByHCTLOKReturn = mockhelper.ValidDeviceName
+	mock.SCSIGetDeviceNameByHCTLOK(scsi)
 
 	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL2
 	mock.SCSIGetDeviceNameByHCTLErr(scsi)
@@ -132,12 +155,7 @@ func waitForDeviceWWNMock(mock *baseMockHelper,
 	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1Target1
 	mock.SCSIGetDeviceNameByHCTLErr(scsi)
 
-	findHCTLsForFCHBAMock(mock, filepath, os)
-
-	mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1
-	mock.SCSIGetDeviceNameByHCTLOKReturn = mockhelper.ValidDeviceName
-	mock.SCSIGetDeviceNameByHCTLOK(scsi)
-
+	// Devices to validate
 	mock.SCSICheckDeviceIsValidCallDevice = mockhelper.ValidDevicePath
 	mock.SCSICheckDeviceIsValidOKReturn = true
 	mock.SCSICheckDeviceIsValidOK(scsi)
@@ -1125,5 +1143,217 @@ func TestFCConnector_findHCTLsForFCHBA(t *testing.T) {
 				t.Errorf("FCConnector.findHCTLsForFCHBA() got = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFCConnector_DisconnectVolumeByWWN_AcquireFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fields := getDefaultFCFields(ctrl)
+	if fields.limiter == nil {
+		fields.limiter = semaphore.NewWeighted(1)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	fc := &FCConnector{
+		baseConnector:             fields.baseConnector,
+		multipath:                 fields.multipath,
+		scsi:                      fields.scsi,
+		filePath:                  fields.filePath,
+		os:                        fields.os,
+		limiter:                   fields.limiter,
+		waitDeviceRegisterTimeout: fields.waitDeviceRegisterTimeout,
+	}
+
+	err := fc.DisconnectVolumeByWWN(ctx, "any-wwn")
+	if err == nil {
+		t.Fatalf("expected limiter error, got nil")
+	}
+	want := "too many parallel operations. try later"
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestFCConnector_DisconnectVolumeByDeviceName_AcquireFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fields := getDefaultFCFields(ctrl)
+	if fields.limiter == nil {
+		fields.limiter = semaphore.NewWeighted(1)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	fc := &FCConnector{
+		baseConnector:             fields.baseConnector,
+		multipath:                 fields.multipath,
+		scsi:                      fields.scsi,
+		filePath:                  fields.filePath,
+		os:                        fields.os,
+		limiter:                   fields.limiter,
+		waitDeviceRegisterTimeout: fields.waitDeviceRegisterTimeout,
+	}
+
+	err := fc.DisconnectVolumeByDeviceName(ctx, "device-name")
+	if err == nil {
+		t.Fatalf("expected limiter error, got nil")
+	}
+	want := "too many parallel operations. try later"
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestFCConnector_cleanConnection_GetFCHBASInfoError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fields := getDefaultFCFields(ctrl)
+
+	scanErr := errors.New("scan error")
+
+	// Allow the initial Stat() probe to pass
+	fields.os.EXPECT().
+		Stat("/sys/class/fc_host").
+		Return(fakeDirFileInfo{"fc_host"}, nil).
+		AnyTimes()
+
+	// Force the HBA enumeration to fail
+	fields.filePath.EXPECT().
+		Glob(gomock.Any()).
+		Return(nil, scanErr).
+		AnyTimes()
+
+	fc := &FCConnector{
+		baseConnector:             fields.baseConnector,
+		multipath:                 fields.multipath,
+		scsi:                      fields.scsi,
+		filePath:                  fields.filePath,
+		os:                        fields.os,
+		limiter:                   fields.limiter,
+		waitDeviceRegisterTimeout: fields.waitDeviceRegisterTimeout,
+	}
+
+	err := fc.cleanConnection(context.Background(), true, FCVolumeInfo{})
+	if err == nil {
+		t.Fatalf("cleanConnection() expected error, got nil")
+	}
+	if !errors.Is(err, scanErr) {
+		t.Fatalf("cleanConnection() error = %v, want %v", err, scanErr)
+	}
+}
+
+func stubWaitUdev(t *testing.T, fn func(context.Context, *FCConnector) func(context.Context, string, string) error) {
+	t.Helper()
+	orig := waitUdevSymlinkFunc
+	waitUdevSymlinkFunc = fn
+	t.Cleanup(func() { waitUdevSymlinkFunc = orig })
+}
+
+func Test_waitSingleDevice_Success_FirstIteration_NoSleep(t *testing.T) {
+	ctx := context.Background()
+	wwn := "wwn-123"
+	devices := []string{"sda", "sdb"}
+
+	stubWaitUdev(t, func(_ context.Context, _ *FCConnector) func(context.Context, string, string) error {
+		return func(_ context.Context, d string, gotWWN string) error {
+			if d == "sdb" && gotWWN == wwn {
+				return nil
+			}
+			return errors.New("not ready")
+		}
+	})
+
+	fc := &FCConnector{waitDeviceRegisterTimeout: 1 * time.Second}
+
+	got, err := fc.waitSingleDevice(ctx, wwn, devices)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "sdb" {
+		t.Fatalf("got device %q, want %q", got, "sdb")
+	}
+}
+
+func Test_waitSingleDevice_CanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	stubWaitUdev(t, func(_ context.Context, _ *FCConnector) func(context.Context, string, string) error {
+		return func(_ context.Context, _ string, _ string) error { return errors.New("should not be called") }
+	})
+
+	fc := &FCConnector{waitDeviceRegisterTimeout: 1 * time.Second}
+
+	got, err := fc.waitSingleDevice(ctx, "wwn-xyz", []string{"sda"})
+	if err == nil || err.Error() != "waitDevice canceled" {
+		t.Fatalf("expected 'waitDevice canceled' error, got %v", err)
+	}
+	if got != "" {
+		t.Fatalf("expected empty device on cancel, got %q", got)
+	}
+}
+
+func TestFCConnector_DisconnectVolume_AcquireFails_CanceledCtx(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fields := getDefaultFCFields(ctrl)
+	if fields.limiter == nil {
+		fields.limiter = semaphore.NewWeighted(1)
+	}
+
+	fc := &FCConnector{
+		baseConnector:             fields.baseConnector,
+		multipath:                 fields.multipath,
+		scsi:                      fields.scsi,
+		filePath:                  fields.filePath,
+		os:                        fields.os,
+		limiter:                   fields.limiter,
+		waitDeviceRegisterTimeout: fields.waitDeviceRegisterTimeout,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := fc.DisconnectVolume(ctx, validFCVolumeInfo)
+	if err == nil {
+		t.Fatalf("expected limiter error, got nil")
+	}
+	want := "too many parallel operations. try later"
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestFCConnector_connectDevice_ErrorPath_Simple(t *testing.T) {
+	ctx := context.Background()
+	fc := &FCConnector{}
+
+	origTrace := traceFuncCallFunc
+	traceFuncCallFunc = func(_ context.Context, _ string) func() { return func() {} }
+	t.Cleanup(func() { traceFuncCallFunc = origTrace })
+
+	wantErr := errors.New("wwn lookup failed")
+	origWait := waitForDeviceWWNFunc
+	waitForDeviceWWNFunc = func(_ context.Context, _ *FCConnector) func(context.Context, []FCHBA, FCVolumeInfo) (string, error) {
+		return func(context.Context, []FCHBA, FCVolumeInfo) (string, error) {
+			return "", wantErr
+		}
+	}
+	t.Cleanup(func() { waitForDeviceWWNFunc = origWait })
+
+	dev, err := fc.connectDevice(ctx, []FCHBA{{}}, validFCVolumeInfo)
+	if err == nil || err != wantErr {
+		t.Fatalf("connectDevice() error = %v, want %v", err, wantErr)
+	}
+	if dev != (Device{}) {
+		t.Fatalf("connectDevice() dev = %#v, want zero Device{}", dev)
 	}
 }

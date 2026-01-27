@@ -1,6 +1,6 @@
 /*
  *
- * Copyright © 2020 Dell Inc. or its subsidiaries. All Rights Reserved.
+ * Copyright © 2020-2026 Dell Inc. or its subsidiaries. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,6 +156,9 @@ type ISCSIConnector struct {
 type ISCSITargetInfo struct {
 	Portal string
 	Target string
+	// NetworkID is the ID of the network that this target is reachable on.
+	// This data is returned from the array API and filled in by the driver to manage discovery.
+	NetworkID string
 }
 
 // ISCSIVolumeInfo defines iscsi volume info

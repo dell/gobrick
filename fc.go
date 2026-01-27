@@ -451,7 +451,6 @@ func (fc *FCConnector) waitForDeviceWWN(
 	secondsNextScan = 1
 
 	doScans := true
-
 	for doScans {
 		var hctlsToRescan []scsi.HCTL
 		var hctlsToDiscover []scsi.HCTL
@@ -474,6 +473,8 @@ func (fc *FCConnector) waitForDeviceWWN(
 			}
 			secondsNextScan = int(math.Pow(float64(numRescans+2), 2))
 		}
+		var devicesToValidate []string
+		var validDevices []string
 		for _, hctl := range hctlsToDiscover {
 			if !hctl.IsFullInfo() {
 				logger.Debug(ctx, "HCTL incomplete, skip device resolving")
@@ -493,19 +494,23 @@ func (fc *FCConnector) waitForDeviceWWN(
 					logger.Error(ctx, err.Error())
 				}
 			}
-
+			devicesToValidate = append(devicesToValidate, d)
+		}
+		for _, d := range devicesToValidate {
 			if fc.scsi.CheckDeviceIsValid(ctx, path.Join("/dev/", d)) {
 				logger.Debug(ctx, "device %s is valid", d)
-				wwn, err := fc.scsi.GetDeviceWWN(ctx, []string{d})
-				if err != nil {
-					logger.Error(ctx, "failed to get %s WWN: %s", d, err.Error())
-					continue
-				}
-				logger.Info(ctx, "FC wwn found: %s", wwn)
-				return wwn, nil
+				validDevices = append(validDevices, d)
 			}
-			logger.Debug(ctx, "device %s is invalid", d)
 		}
+		if len(validDevices) > 0 {
+			wwn, err := fc.scsi.GetDeviceWWN(ctx, validDevices)
+			if err != nil {
+				return "", err
+			}
+			logger.Info(ctx, "wwn for FC device found: %s", wwn)
+			return wwn, nil
+		}
+
 		select {
 		case <-ctx.Done():
 			doScans = false

@@ -33,6 +33,7 @@ import (
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/dell/goiscsi"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sync/singleflight"
 )
@@ -889,6 +890,158 @@ func TestISCSIConnector_findHCTLByISCSISessionID(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("findHCTLByISCSISessionID() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAddDefaultISCSIPortToVolumeInfoPortals(t *testing.T) {
+	// Test case 1: When the portal doesn't contain a port
+	t.Run("Portal without port", func(t *testing.T) {
+		info := &ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{
+				{Portal: "192.168.1.10", Target: "target1"},
+			},
+		}
+
+		addDefaultISCSIPortToVolumeInfoPortals(info)
+
+		assert.Equal(t, "192.168.1.10:3260", info.Targets[0].Portal)
+	})
+
+	// Test case 2: When the portal already has a port
+	t.Run("Portal with port", func(t *testing.T) {
+		info := &ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{
+				{Portal: "192.168.1.10:1234", Target: "target1"},
+			},
+		}
+
+		addDefaultISCSIPortToVolumeInfoPortals(info)
+
+		assert.Equal(t, "192.168.1.10:1234", info.Targets[0].Portal)
+	})
+
+	// Test case 3: When there are multiple targets, some with and some without ports
+	t.Run("Multiple targets, some with and some without port", func(t *testing.T) {
+		info := &ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{
+				{Portal: "192.168.1.10", Target: "target1"},
+				{Portal: "192.168.1.20:5000", Target: "target2"},
+			},
+		}
+
+		addDefaultISCSIPortToVolumeInfoPortals(info)
+
+		assert.Equal(t, "192.168.1.10:3260", info.Targets[0].Portal)
+		assert.Equal(t, "192.168.1.20:5000", info.Targets[1].Portal)
+	})
+
+	// Test case 4: When the targets list is empty
+	t.Run("Empty targets list", func(t *testing.T) {
+		info := &ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{},
+		}
+
+		addDefaultISCSIPortToVolumeInfoPortals(info)
+
+		assert.Len(t, info.Targets, 0) // Ensure the list is still empty
+	})
+}
+
+func TestValidateISCSIVolumeInfo(t *testing.T) {
+	connector := &ISCSIConnector{}
+
+	// Test case 1: Empty Targets list
+	t.Run("Empty Targets list", func(t *testing.T) {
+		info := ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{},
+		}
+		err := connector.validateISCSIVolumeInfo(context.Background(), info)
+		assert.EqualError(t, err, "at least one iSCSI target required")
+	})
+
+	// Test case 2: Target is empty
+	t.Run("Target is empty", func(t *testing.T) {
+		info := ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{
+				{Portal: "192.168.1.10:3260", Target: ""},
+			},
+		}
+		err := connector.validateISCSIVolumeInfo(context.Background(), info)
+		assert.EqualError(t, err, "invalid target info")
+	})
+
+	// Test case 3: Portal is empty
+	t.Run("Portal is empty", func(t *testing.T) {
+		info := ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{
+				{Portal: "", Target: "target1"},
+			},
+		}
+		err := connector.validateISCSIVolumeInfo(context.Background(), info)
+		assert.EqualError(t, err, "invalid target info")
+	})
+
+	// Test case 4: Both Target and Portal are valid
+	t.Run("Valid Target and Portal", func(t *testing.T) {
+		info := ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{
+				{Portal: "192.168.1.10:3260", Target: "target1"},
+			},
+		}
+		err := connector.validateISCSIVolumeInfo(context.Background(), info)
+		assert.NoError(t, err)
+	})
+
+	// Test case 5: Multiple targets, some valid and some invalid
+	t.Run("Multiple targets with some invalid", func(t *testing.T) {
+		info := ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{
+				{Portal: "192.168.1.10:3260", Target: "target1"},
+				{Portal: "", Target: "target2"}, // Invalid target with empty portal
+			},
+		}
+		err := connector.validateISCSIVolumeInfo(context.Background(), info)
+		assert.EqualError(t, err, "invalid target info")
+	})
+}
+
+func TestISCSIConnector_cleanConnection(t *testing.T) {
+	tests := []struct {
+		name    string
+		params  ISCSIConnectorParams
+		force   bool
+		info    ISCSIVolumeInfo
+		wantErr bool
+	}{
+		{
+			name: "success",
+			params: ISCSIConnectorParams{
+				Chroot: "/chroot",
+			},
+			force: false,
+			info: ISCSIVolumeInfo{
+				Targets: []ISCSITargetInfo{
+					{Portal: "192.168.1.10:3260", Target: "target1"},
+					{Portal: "192.168.1.20:3260", Target: "target2"},
+				},
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := NewISCSIConnector(tt.params)
+			gotErr := c.cleanConnection(context.Background(), tt.force, tt.info)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("cleanConnection() failed: %v", gotErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("cleanConnection() succeeded unexpectedly")
 			}
 		})
 	}

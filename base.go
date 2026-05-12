@@ -238,7 +238,7 @@ func (bc *baseConnector) cleanNVMeDevices(ctx context.Context,
 		err := bc.cleanMultipathDevice(ctx, dm, wwn)
 		if err != nil {
 			msg := fmt.Sprintf("failed to flush multipath device: %s", err.Error())
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			if !force {
 				return err
 			}
@@ -266,7 +266,7 @@ func (bc *baseConnector) cleanDevicesByMpathInfo(ctx context.Context, force bool
 		err := bc.cleanMultipathDeviceByName(ctx, req.mpathName)
 		if err != nil {
 			msg := fmt.Sprintf("failed to flush multipath device: %s", err.Error())
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			if !force {
 				return err
 			}
@@ -315,7 +315,7 @@ func (bc *baseConnector) cleanDevices(ctx context.Context,
 		err := bc.cleanMultipathDevice(ctx, dm, wwn)
 		if err != nil {
 			msg := fmt.Sprintf("failed to flush multipath device: %s", err.Error())
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			if !force {
 				return err
 			}
@@ -412,7 +412,7 @@ func (bc *baseConnector) getDMWWN(ctx context.Context, dm string) (string, error
 	wwn, err := bc.multipath.GetDMWWID(ctx, dm)
 	if err != nil {
 		msg := fmt.Sprintf("failed to resolve DM %s WWN: %s", dm, err.Error())
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return "", errors.New(msg)
 	}
 	logger.Info(ctx, "WWN for DM %s is: %s", dm, wwn)
@@ -438,7 +438,7 @@ func (bc *baseConnector) getNVMEDMWWN(ctx context.Context, dm string) (string, e
 	wwn, err := bc.multipath.GetDMWWID(ctx, dm)
 	if err != nil {
 		msg := fmt.Sprintf("failed to resolve DM %s WWN: %s", dm, err.Error())
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return "", errors.New(msg)
 	}
 	logger.Info(ctx, "WWN for DM %s is: %s", dm, wwn)

@@ -63,7 +63,7 @@ func (fc *FCConnector) cleanRDMConnection(ctx context.Context, force bool, info 
 	devices, err := fc.scsi.GetDevicesByWWN(ctx, wwn)
 	if err != nil || len(devices) == 0 {
 		msg := "failed to get devices by WWN: " + wwn
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return errors.New(msg)
 	}
 	logger.Info(ctx, "devices found: %s", devices)
@@ -91,7 +91,7 @@ func (fc *FCConnector) connectRDM(ctx context.Context, info RDMVolumeInfo) (Devi
 	devices, err := fc.scsi.GetDevicesByWWN(ctx, wwn)
 	if err != nil || len(devices) == 0 {
 		msg := "failed to get devices by WWN: " + wwn
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return Device{}, errors.New(msg)
 	}
 	var device string
@@ -102,7 +102,7 @@ func (fc *FCConnector) connectRDM(ctx context.Context, info RDMVolumeInfo) (Devi
 
 	if !fc.scsi.CheckDeviceIsValid(ctx, path.Join("/dev/", device)) {
 		msg := "device invalid"
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return Device{}, errors.New(msg)
 	}
 	d := Device{WWN: wwn, Name: device}

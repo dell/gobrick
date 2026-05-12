@@ -226,7 +226,7 @@ func (c *ISCSIConnector) ConnectVolume(ctx context.Context, info ISCSIVolumeInfo
 			return d, nil
 		}
 		msg := fmt.Sprintf("device %s found but failed to read data from it", d.Name)
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		err = errors.New(msg)
 	}
 	logger.Error(ctx, "failed to connect volume, try to cleanup: %s", err.Error())
@@ -354,7 +354,7 @@ func (c *ISCSIConnector) connectSingleDevice(
 		}
 		if discoveryComplete && len(devices) == 0 {
 			msg := "discovery complete but devices not found"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 		if wwn == "" && len(devices) != 0 {
@@ -380,7 +380,7 @@ func (c *ISCSIConnector) connectSingleDevice(
 		}
 		if lastTry && time.Now().After(endTime) {
 			msg := "registered device not found"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 		time.Sleep(time.Second)
@@ -442,7 +442,7 @@ func (c *ISCSIConnector) connectPowerpathDevice(
 		}
 		if discoveryComplete && len(devices) == 0 {
 			msg := "discovery complete but devices not found"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 		if wwn == "" && len(devices) != 0 {
@@ -474,7 +474,7 @@ func (c *ISCSIConnector) connectPowerpathDevice(
 		}
 		if lastTry && time.Now().After(endTime) {
 			msg := "registered device not found"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 		time.Sleep(time.Second)
@@ -525,7 +525,7 @@ func (c *ISCSIConnector) connectMultipathDevice(
 		}
 		if discoveryComplete && len(devices) == 0 {
 			msg := "discovery complete but devices not found"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 		if wwn == "" && len(devices) != 0 {
@@ -545,7 +545,7 @@ func (c *ISCSIConnector) connectMultipathDevice(
 				if err := c.multipath.AddWWID(ctx, wwn); err == nil {
 					wwnAdded = true
 				} else {
-					logger.Info(ctx, err.Error())
+					logger.Info(ctx, "%s", err.Error())
 				}
 			}
 		}
@@ -561,14 +561,14 @@ func (c *ISCSIConnector) connectMultipathDevice(
 			lastTry = true
 			for _, d := range devices {
 				if err := c.multipath.AddPath(ctx, path.Join("/dev/", d)); err != nil {
-					logger.Error(ctx, err.Error())
+					logger.Error(ctx, "%s", err.Error())
 				}
 			}
 			endTime = time.Now().Add(c.waitDeviceRegisterTimeout)
 		}
 		if lastTry && time.Now().After(endTime) {
 			msg := "registered multipath device not found"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 		time.Sleep(time.Second)
@@ -612,7 +612,7 @@ func (c *ISCSIConnector) discoverDevice(
 				hctlFound = true
 				hctl = resp
 			} else {
-				logger.Error(ctx, err.Error())
+				logger.Error(ctx, "%s", err.Error())
 			}
 		}
 		if hctlFound {
@@ -620,7 +620,7 @@ func (c *ISCSIConnector) discoverDevice(
 				numRescans++
 				err := c.scsi.RescanSCSIHostByHCTL(ctx, hctl)
 				if err != nil {
-					logger.Error(ctx, err.Error())
+					logger.Error(ctx, "%s", err.Error())
 				}
 				secondsNextScan = int(math.Pow(float64(numRescans+2), 2))
 			}
@@ -633,14 +633,14 @@ func (c *ISCSIConnector) discoverDevice(
 							"try to refresh device information", dev)
 						err := c.scsi.RescanSCSIDeviceByHCTL(ctx, hctl)
 						if err != nil {
-							logger.Error(ctx, err.Error())
+							logger.Error(ctx, "%s", err.Error())
 						}
 					}
 					logger.Info(ctx, "device found: %s", dev)
 					result <- dev
 					return
 				}
-				logger.Error(ctx, err.Error())
+				logger.Error(ctx, "%s", err.Error())
 
 			}
 		}
@@ -708,13 +708,13 @@ func (c *ISCSIConnector) checkISCSISessions(
 	if len(targetsToLogin) != 0 {
 		newSession, err := c.tryISCSILogin(ctx, targetsToLogin, len(activeSessions) == 0)
 		if err != nil && len(activeSessions) == 0 {
-			logger.Error(ctx, errMsg)
+			logger.Error(ctx, "%s", errMsg)
 			return nil, errors.New(errMsg)
 		}
 		activeSessions = append(activeSessions, newSession...)
 	}
 	if len(activeSessions) == 0 {
-		logger.Error(ctx, errMsg)
+		logger.Error(ctx, "%s", errMsg)
 		return nil, errors.New(errMsg)
 	}
 	logger.Info(ctx, "found active iSCSI session")
@@ -729,12 +729,12 @@ func (c *ISCSIConnector) tryISCSILogin(
 	for _, t := range targets {
 		logPrefix := fmt.Sprintf("Portal: %s, Target: %s :", t.Portal, t.Target)
 		tgt := goiscsi.ISCSITarget{Portal: t.Portal, Target: t.Target}
-		logger.Info(ctx, logPrefix+"trying login to iSCSI target")
+		logger.Info(ctx, "%s", logPrefix+"trying login to iSCSI target")
 		mutexKey := strings.Join([]string{t.Portal, t.Target}, ":")
 		if !(c.loginLock.RateCheck(
 			mutexKey,
 			c.failedSessionMinimumLoginRetryInterval) || force) {
-			logger.Error(ctx, logPrefix+"rate limit - skip login")
+			logger.Error(ctx, "%s", logPrefix+"rate limit - skip login")
 			continue
 		}
 		err := c.iscsiLib.PerformLogin(tgt)
@@ -745,15 +745,15 @@ func (c *ISCSIConnector) tryISCSILogin(
 
 		s, found, err := c.getSessionByTargetInfo(ctx, t)
 		if err != nil || !found {
-			logger.Error(ctx, logPrefix+"can't read session info after login")
+			logger.Error(ctx, "%s", logPrefix+"can't read session info after login")
 			continue
 		}
-		logger.Info(ctx, logPrefix+"successfully login to iSCSI target")
+		logger.Info(ctx, "%s", logPrefix+"successfully login to iSCSI target")
 		sessions = append(sessions, s)
 	}
 	if len(targets) != 0 && len(sessions) == 0 {
 		msg := "can't login to all Targets"
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return nil, errors.New(msg)
 	}
 	return sessions, nil
@@ -787,7 +787,7 @@ func (c *ISCSIConnector) tryEnableManualISCSISessionMGMT(ctx context.Context, ta
 		}
 	}
 	if !c.manualSessionManagement {
-		logger.Error(ctx, logPrefix+"manual session management not supported")
+		logger.Error(ctx, "%s", logPrefix+"manual session management not supported")
 	}
 	return nil
 }
@@ -820,9 +820,9 @@ func (c *ISCSIConnector) getSessionByTargetInfo(ctx context.Context,
 		}
 	}
 	if found {
-		logger.Info(ctx, logPrefix+"iSCSI session found")
+		logger.Info(ctx, "%s", logPrefix+"iSCSI session found")
 	} else {
-		logger.Info(ctx, logPrefix+"iSCSI session not found")
+		logger.Info(ctx, "%s", logPrefix+"iSCSI session not found")
 	}
 	return r, found, nil
 }
@@ -843,7 +843,7 @@ func (c *ISCSIConnector) findHCTLByISCSISessionID(
 		targetData := strings.Split(fileName, ":")
 		if len(targetData) != 3 {
 			msg := "can't parse values from filename"
-			logger.Info(ctx, msg)
+			logger.Info(ctx, "%s", msg)
 			return result, errors.New(msg)
 		}
 		result.Host = targetData[0][6:]
@@ -861,7 +861,7 @@ func (c *ISCSIConnector) findHCTLByISCSISessionID(
 	result.Host = strings.Split(matches[0], "/")[4][4:]
 	result.Channel = "-"
 	result.Target = "-"
-	result.Lun = "-"
+	result.Lun = lun
 
 	return result, nil
 }

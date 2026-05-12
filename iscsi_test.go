@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -43,8 +44,8 @@ var (
 	validISCSITarget1       = "iqn.2015-10.com.dell:dellemc-foobar123"
 	validISCSIPortal2       = "1.1.1.1:3260"
 	validISCSITarget2       = "iqn.2015-10.com.dell:dellemc-spam789"
-	validHostOnlyIscsiHCTL1 = scsi.HCTL{Host: validSCSIHost1, Channel: "-", Target: "-", Lun: "-"}
-	validHostOnlyIscsiHCTL2 = scsi.HCTL{Host: validSCSIHost2, Channel: "-", Target: "-", Lun: "-"}
+	validHostOnlyIscsiHCTL1 = scsi.HCTL{Host: validSCSIHost1, Channel: "-", Target: "-", Lun: strconv.FormatInt(int64(validLunNumber), 10)}
+	validHostOnlyIscsiHCTL2 = scsi.HCTL{Host: validSCSIHost2, Channel: "-", Target: "-", Lun: strconv.FormatInt(int64(validLunNumber), 10)}
 	validISCSITargetInfo1   = ISCSITargetInfo{
 		Portal: validISCSIPortal1,
 		Target: validISCSITarget1,
@@ -834,7 +835,7 @@ func TestISCSIConnector_findHCTLByISCSISessionID(t *testing.T) {
 		wantErr     bool
 	}{
 		{
-			name:   "can not parse values from filename",
+			name:   "can not parse values from filename - insufficient parts",
 			fields: getDefaultISCSIFields(ctrl),
 			stateSetter: func(fields iscsiFields) {
 				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/iscsi_host/host*/device/session1/target1"}, nil)
@@ -848,7 +849,7 @@ func TestISCSIConnector_findHCTLByISCSISessionID(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:   "Failed to resolve glob pattern",
+			name:   "Failed to resolve glob pattern - target path",
 			fields: getDefaultISCSIFields(ctrl),
 			stateSetter: func(fields iscsiFields) {
 				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, errors.New("failed to resolve HCTL"))
@@ -860,6 +861,186 @@ func TestISCSIConnector_findHCTLByISCSISessionID(t *testing.T) {
 			},
 			want:    scsi.HCTL{},
 			wantErr: true,
+		},
+		{
+			name:   "empty sessionID",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil)
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil)
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "",
+				lun:       "1",
+			},
+			want:    scsi.HCTL{},
+			wantErr: true,
+		},
+		{
+			name:   "empty lun parameter",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{
+					"/sys/class/iscsi_host/host34/device/session12/target34:0:0",
+				}, nil)
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "12",
+				lun:       "",
+			},
+			want:    scsi.HCTL{Host: "34", Channel: "0", Target: "0", Lun: ""},
+			wantErr: false,
+		},
+		{
+			name:   "successful target resolution - full HCTL",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{
+					"/sys/class/iscsi_host/host34/device/session12/target34:0:0",
+				}, nil)
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "12",
+				lun:       "9",
+			},
+			want:    scsi.HCTL{Host: "34", Channel: "0", Target: "0", Lun: "9"},
+			wantErr: false,
+		},
+		{
+			name:   "successful target resolution - multi-digit host and target",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{
+					"/sys/class/iscsi_host/host128/device/session256/target128:15:1024",
+				}, nil)
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "256",
+				lun:       "512",
+			},
+			want:    scsi.HCTL{Host: "128", Channel: "15", Target: "1024", Lun: "512"},
+			wantErr: false,
+		},
+		{
+			name:   "host-only fallback - target pattern fails",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				// First call (target pattern) returns empty
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil)
+				// Second call (session pattern) succeeds
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{
+					"/sys/class/iscsi_host/host42/device/session99",
+				}, nil)
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "99",
+				lun:       "7",
+			},
+			want:    scsi.HCTL{Host: "42", Channel: "-", Target: "-", Lun: "7"},
+			wantErr: false,
+		},
+		{
+			name:   "host-only fallback - session pattern fails",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				// First call (target pattern) returns empty
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil)
+				// Second call (session pattern) fails
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, errors.New("session pattern failed"))
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "99",
+				lun:       "7",
+			},
+			want:    scsi.HCTL{},
+			wantErr: true,
+		},
+		{
+			name:   "malformed target filename - too many parts",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{
+					"/sys/class/iscsi_host/host*/device/session1/target34:0:0:extra",
+				}, nil)
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "1",
+				lun:       "1",
+			},
+			want:    scsi.HCTL{},
+			wantErr: true,
+		},
+		{
+			name:   "multiple target matches - should use first one",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{
+					"/sys/class/iscsi_host/host34/device/session12/target34:0:0",
+					"/sys/class/iscsi_host/host34/device/session12/target34:1:1",
+				}, nil)
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "12",
+				lun:       "9",
+			},
+			want:    scsi.HCTL{Host: "34", Channel: "0", Target: "0", Lun: "9"},
+			wantErr: false,
+		},
+		{
+			name:   "very long sessionID and lun",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{
+					"/sys/class/iscsi_host/host99999/device/session123456789/target99999:255:65535",
+				}, nil)
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "123456789",
+				lun:       "999999",
+			},
+			want:    scsi.HCTL{Host: "99999", Channel: "255", Target: "65535", Lun: "999999"},
+			wantErr: false,
+		},
+		{
+			name:   "special characters in sessionID (should still work)",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{
+					"/sys/class/iscsi_host/host1/device/sessionabc-def/target1:0:0",
+				}, nil)
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "abc-def",
+				lun:       "1",
+			},
+			want:    scsi.HCTL{Host: "1", Channel: "0", Target: "0", Lun: "1"},
+			wantErr: false,
+		},
+		{
+			name:   "zero values in HCTL fields",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{
+					"/sys/class/iscsi_host/host0/device/session0/target0:0:0",
+				}, nil)
+			},
+			args: args{
+				ctx:       ctx,
+				sessionID: "0",
+				lun:       "0",
+			},
+			want:    scsi.HCTL{Host: "0", Channel: "0", Target: "0", Lun: "0"},
+			wantErr: false,
 		},
 	}
 
@@ -888,10 +1069,56 @@ func TestISCSIConnector_findHCTLByISCSISessionID(t *testing.T) {
 				t.Errorf("findHCTLByISCSISessionID() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got != tt.want {
-				t.Errorf("findHCTLByISCSISessionID() got = %v, want %v", got, tt.want)
+			if !tt.wantErr {
+				assertHCTLEqual(t, got, tt.want)
 			}
 		})
+	}
+}
+
+// Additional test for context cancellation behavior
+func TestISCSIConnector_findHCTLByISCSISessionID_ContextCancellation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	fields := getDefaultISCSIFields(ctrl)
+
+	// Setup mock to return a valid result (but context is already cancelled)
+	fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{
+		"/sys/class/iscsi_host/host34/device/session12/target34:0:0",
+	}, nil)
+
+	c := &ISCSIConnector{
+		filePath: fields.filePath,
+	}
+
+	// The function should still work even with cancelled context since it doesn't check context
+	got, err := c.findHCTLByISCSISessionID(ctx, "12", "9")
+	if err != nil {
+		t.Errorf("Unexpected error with cancelled context: %v", err)
+	}
+	want := scsi.HCTL{Host: "34", Channel: "0", Target: "0", Lun: "9"}
+	assertHCTLEqual(t, got, want)
+}
+
+// Test helper function to validate HCTL equality with better error messages
+func assertHCTLEqual(t *testing.T, got, want scsi.HCTL) {
+	t.Helper()
+	if got.Host != want.Host {
+		t.Errorf("Host field mismatch: got = %v, want = %v", got.Host, want.Host)
+	}
+	if got.Channel != want.Channel {
+		t.Errorf("Channel field mismatch: got = %v, want = %v", got.Channel, want.Channel)
+	}
+	if got.Target != want.Target {
+		t.Errorf("Target field mismatch: got = %v, want = %v", got.Target, want.Target)
+	}
+	if got.Lun != want.Lun {
+		t.Errorf("Lun field mismatch: got = %v, want = %v", got.Lun, want.Lun)
 	}
 }
 

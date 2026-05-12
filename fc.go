@@ -160,7 +160,7 @@ func (fc *FCConnector) ConnectVolume(ctx context.Context, info FCVolumeInfo) (De
 	}
 	if len(hbas) == 0 {
 		msg := "FC HBAs not found. FC is not supported on this host"
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return Device{}, errors.New(msg)
 	}
 	device, err := fc.connectDevice(ctx, hbas, info)
@@ -229,7 +229,7 @@ func (fc *FCConnector) cleanConnection(ctx context.Context, force bool, info FCV
 	for _, hba := range hbas {
 		_, hctls, err := fc.findHCTLsForFCHBA(ctx, hba, info)
 		if err != nil {
-			logger.Error(ctx, err.Error())
+			logger.Error(ctx, "%s", err.Error())
 		}
 		if len(hctls) == 0 {
 			continue
@@ -238,7 +238,7 @@ func (fc *FCConnector) cleanConnection(ctx context.Context, force bool, info FCV
 			if hctl.IsFullInfo() {
 				device, err := fc.scsi.GetDeviceNameByHCTL(ctx, hctl)
 				if err != nil {
-					logger.Error(ctx, err.Error())
+					logger.Error(ctx, "%s", err.Error())
 					continue
 				}
 				devices = append(devices, device)
@@ -301,7 +301,7 @@ func (fc *FCConnector) connectDevice(
 	devices, err := getDevicesByWWNFunc(ctx, fc)(ctx, wwn)
 	if err != nil || len(devices) == 0 {
 		msg := "failed to get devices by WWN: " + wwn
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return Device{}, errors.New(msg)
 	}
 
@@ -311,7 +311,7 @@ func (fc *FCConnector) connectDevice(
 		device, err = waitPowerpathDeviceFunc(ctx, fc)(ctx, wwn, devices)
 		if err != nil {
 			msg := "failed to find powerpath device"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 	} else if !isMultipathDaemonRunningFunc(ctx, fc)(ctx) {
@@ -324,13 +324,13 @@ func (fc *FCConnector) connectDevice(
 		device, err = waitMultipathDeviceFunc(ctx, fc)(ctx, wwn, devices)
 		if err != nil {
 			msg := "failed to find multipath device"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 	}
 	if !checkDeviceIsValidFunc(ctx, fc)(ctx, path.Join("/dev/", device)) {
 		msg := "multipath device was found but failed to read data from it"
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return Device{}, errors.New(msg)
 	}
 	d := Device{WWN: wwn, Name: device}
@@ -355,7 +355,7 @@ func (fc *FCConnector) waitSingleDevice(ctx context.Context, wwn string, devices
 		time.Sleep(time.Second)
 	}
 	msg := fmt.Sprintf("timeout waiting device for wwn %s", wwn)
-	logger.Info(ctx, msg)
+	logger.Info(ctx, "%s", msg)
 	return "", errors.New(msg)
 }
 
@@ -383,7 +383,7 @@ func (fc *FCConnector) waitMultipathDevice(
 	for _, d := range devices {
 		devPath := path.Join("/dev/", d)
 		if err := addPathFunc(ctx, fc)(ctx, devPath); err != nil {
-			logger.Info(ctx, err.Error())
+			logger.Info(ctx, "%s", err.Error())
 		}
 	}
 
@@ -405,7 +405,7 @@ func (fc *FCConnector) waitMultipathDevice(
 	}
 	if mpath == "" {
 		msg := fmt.Sprintf("multipath device for WWN %s not found", wwn)
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return "", errors.New(msg)
 	}
 	logger.Info(ctx, "multipath device for WWN %s found: %s", wwn, mpath)
@@ -434,7 +434,7 @@ func (fc *FCConnector) waitPowerpathDevice(
 	}
 	if ppath == "" {
 		msg := fmt.Sprintf("powerpath device for WWN %s not found", wwn)
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return "", errors.New(msg)
 	}
 	logger.Info(ctx, "powerpath device for WWN %s found: %s", wwn, ppath)
@@ -467,7 +467,7 @@ func (fc *FCConnector) waitForDeviceWWN(
 			for _, hctl := range hctlsToRescan {
 				err := fc.scsi.RescanSCSIHostByHCTL(ctx, hctl)
 				if err != nil {
-					logger.Error(ctx, err.Error())
+					logger.Error(ctx, "%s", err.Error())
 					continue
 				}
 			}
@@ -491,7 +491,7 @@ func (fc *FCConnector) waitForDeviceWWN(
 					"try to refresh device information", d)
 				err := fc.scsi.RescanSCSIDeviceByHCTL(ctx, hctl)
 				if err != nil {
-					logger.Error(ctx, err.Error())
+					logger.Error(ctx, "%s", err.Error())
 				}
 			}
 			devicesToValidate = append(devicesToValidate, d)
@@ -525,7 +525,7 @@ func (fc *FCConnector) waitForDeviceWWN(
 		}
 	}
 	msg := "wwn for FC device not found"
-	logger.Error(ctx, msg)
+	logger.Error(ctx, "%s", msg)
 	return "", errors.New(msg)
 }
 
@@ -541,7 +541,7 @@ func (fc *FCConnector) findHCTLsForFCHBA(
 	matches, err := fc.filePath.Glob(pattern)
 	if err != nil {
 		msg := fmt.Sprintf("HBA: %s failed to match FC target path: %s", hba, err.Error())
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return nil, nil, errors.New(msg)
 	}
 	targetMap := make(map[string]string)
@@ -549,7 +549,7 @@ func (fc *FCConnector) findHCTLsForFCHBA(
 		data, err := fc.os.ReadFile(path.Join(m, "port_name"))
 		if err != nil {
 			msg := fmt.Sprintf("HBA: %s failed to read port_name for FC target: %s", hba, err.Error())
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return nil, nil, errors.New(msg)
 		}
 		targetMap[m] = strings.Replace(
@@ -609,7 +609,7 @@ func (fc *FCConnector) getFCHBASInfo(ctx context.Context) ([]FCHBA, error) {
 	}
 	match, err := fc.filePath.Glob("/sys/class/fc_host/host*")
 	if err != nil {
-		logger.Error(ctx, err.Error())
+		logger.Error(ctx, "%s", err.Error())
 		return nil, err
 	}
 	var hbas []FCHBA

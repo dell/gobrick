@@ -226,7 +226,7 @@ func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo, 
 			return d, nil
 		}
 		msg := fmt.Sprintf("device %s found but failed to read data from it", d.Name)
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		err = errors.New(msg)
 	}
 	logger.Error(ctx, "failed to connect volume, try to cleanup: %s", err.Error())
@@ -343,12 +343,12 @@ func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolume
 		}
 		if discoveryComplete && len(devices) == 0 {
 			msg := "discovery complete but devices not found"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 		if wwn == "" && len(devices) != 0 {
 			msg := "invalid WWN provided"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 		if wwn != "" && nguid != "" {
@@ -365,7 +365,7 @@ func (c *NVMeConnector) connectSingleDevice(ctx context.Context, info NVMeVolume
 		}
 		if lastTry && time.Now().After(endTime) {
 			msg := "registered device not found"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 		time.Sleep(time.Second)
@@ -419,7 +419,7 @@ func (c *NVMeConnector) connectMultipathDevice(
 		}
 		if discoveryComplete && len(devices) == 0 {
 			msg := "discover complete but devices not found"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 		if wwn == "" && len(devices) != 0 {
@@ -436,7 +436,7 @@ func (c *NVMeConnector) connectMultipathDevice(
 				if err := c.multipath.AddWWID(ctx, wwn); err == nil {
 					wwnAdded = true
 				} else {
-					logger.Info(ctx, err.Error())
+					logger.Info(ctx, "%s", err.Error())
 				}
 			}
 		}
@@ -454,14 +454,14 @@ func (c *NVMeConnector) connectMultipathDevice(
 			lastTry = true
 			for _, d := range devices {
 				if err := c.multipath.AddPath(ctx, path.Join("/dev/", d)); err != nil {
-					logger.Error(ctx, err.Error())
+					logger.Error(ctx, "%s", err.Error())
 				}
 			}
 			endTime = time.Now().Add(c.waitDeviceRegisterTimeout)
 		}
 		if lastTry && time.Now().After(endTime) {
 			msg := "registered multipath device not found"
-			logger.Error(ctx, msg)
+			logger.Error(ctx, "%s", msg)
 			return Device{}, errors.New(msg)
 		}
 		time.Sleep(time.Second)
@@ -519,7 +519,7 @@ func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, 
 			}
 		}
 		devicePathResult = DevicePathResult{devicePaths: devicePaths, nguid: nguidResult}
-		logger.Debug(ctx, "devicePathResult", devicePathResult, "nguidResult", nguidResult, "retryCount", retryCount)
+		logger.Debug(ctx, "devicePathResult: %v nguidResult: %v retryCount: %v", devicePathResult, nguidResult, retryCount)
 		if nguidResult != "" || retryCount == 1 {
 			break
 		}
@@ -651,7 +651,7 @@ func (c *NVMeConnector) checkNVMeSessions(
 	errMsg := "can't find active nvme session"
 
 	if len(activeSessions) == 0 {
-		logger.Error(ctx, errMsg)
+		logger.Error(ctx, "%s", errMsg)
 		return nil, errors.New(errMsg)
 	}
 	logger.Info(ctx, "found active nvme sessions")
@@ -679,9 +679,9 @@ func (c *NVMeConnector) getSessionByTargetInfo(ctx context.Context,
 		}
 	}
 	if found {
-		logger.Info(ctx, logPrefix+"nvme session found")
+		logger.Info(ctx, "%s", logPrefix+"nvme session found")
 	} else {
-		logger.Info(ctx, logPrefix+"nvme session not found")
+		logger.Info(ctx, "%s", logPrefix+"nvme session not found")
 	}
 	return r, found, nil
 }
@@ -691,7 +691,7 @@ func (c *NVMeConnector) getFCHostInfo(ctx context.Context) ([]FCHBAInfo, error) 
 	logger.Info(ctx, "get FC hbas info")
 	match, err := c.filePath.Glob("/sys/class/fc_host/host*")
 	if err != nil {
-		logger.Error(ctx, err.Error())
+		logger.Error(ctx, "%s", err.Error())
 		return nil, err
 	}
 

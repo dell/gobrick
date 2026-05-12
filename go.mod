@@ -1,14 +1,14 @@
 module github.com/dell/gobrick
 
-go 1.25
+go 1.26
 
 require (
-	github.com/dell/goiscsi v1.14.0
-	github.com/dell/gonvme v1.13.0
+	github.com/dell/goiscsi v1.15.0
+	github.com/dell/gonvme v1.14.0
 	github.com/golang/mock v1.6.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.0
-	golang.org/x/sync v0.19.0
+	golang.org/x/sync v0.20.0
 )
 
 require (

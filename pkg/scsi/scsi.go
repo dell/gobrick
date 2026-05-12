@@ -321,7 +321,7 @@ func (s *Scsi) deleteSCSIDeviceByPath(ctx context.Context, devPath string) error
 	logger.Info(ctx, "device state is: %s", deviceState)
 	if deviceState == "blocked" {
 		msg := "device is in blocked state"
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return errors.New(msg)
 	}
 	deleteFile, err := s.os.OpenFile(deletePath, os.O_APPEND|os.O_WRONLY, 0o200)
@@ -462,7 +462,7 @@ func (s *Scsi) getDevicesByWWN(ctx context.Context, wwn string) ([]string, error
 		return result, nil
 	})
 	if err != nil {
-		logger.Error(ctx, err.Error())
+		logger.Error(ctx, "%s", err.Error())
 		return nil, err
 	}
 	devs := ret.(map[string][]string)
@@ -517,7 +517,7 @@ func (s *Scsi) getDeviceNameByHCTL(ctx context.Context, h HCTL) (string, error) 
 		msg := fmt.Sprintf("can't match block device with provided HCTL, "+
 			"%s %s %s %s",
 			h.Host, h.Channel, h.Target, h.Lun)
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return "", errors.New(msg)
 	}
 	// Sort devices and return the first so we don't return a partition
@@ -558,13 +558,13 @@ func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 	symlink, err := s.filePath.EvalSymlinks(checkPath)
 	if err != nil {
 		msg := fmt.Sprintf("symlink for path %s not found: %s", checkPath, err.Error())
-		logger.Info(ctx, msg)
+		logger.Info(ctx, "%s", msg)
 		return errors.New(msg)
 	}
 	log.Debugf("check path: %s, symlink: %s for wwn: %s", checkPath, symlink, wwn)
 	if d := strings.Replace(symlink, "/dev/", "", 1); d != deviceName {
 		msg := fmt.Sprintf("udev symlink point to unexpected device: %s", d)
-		logger.Info(ctx, msg)
+		logger.Info(ctx, "%s", msg)
 		return errors.New(msg)
 	}
 	logger.Info(ctx, "udev symlink for %s with WWN %s found", deviceName, wwn)
@@ -594,12 +594,12 @@ func (s *Scsi) waitUdevSymlinkNVMe(ctx context.Context, deviceName string, wwn s
 	symlink, err := s.GetNVMESymlink(checkPath)
 	if err != nil {
 		msg := fmt.Sprintf("symlink for path %s not found: %s", checkPath, err.Error())
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return errors.New(msg)
 	}
 	if d := strings.Replace(symlink, "/dev/", "", 1); d != deviceName {
 		msg := fmt.Sprintf("udev symlink point to unexpected device: %s", d)
-		logger.Error(ctx, msg)
+		logger.Error(ctx, "%s", msg)
 		return errors.New(msg)
 	}
 	logger.Info(ctx, "udev symlink for %s with WWN %s found", deviceName, wwn)

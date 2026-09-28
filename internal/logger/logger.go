@@ -19,14 +19,14 @@ package logger
 
 import (
 	"context"
-	"fmt"
-	"log"
+
+	log "github.com/dell/csmlog"
 )
 
 var logger Logger
 
 func init() {
-	logger = &DummyLogger{}
+	logger = &DefaultLogger{}
 }
 
 // SetLogger initializes custom logger for gobrick
@@ -41,22 +41,22 @@ type Logger interface {
 	Error(ctx context.Context, format string, args ...interface{})
 }
 
-// DummyLogger for testing purposes
-type DummyLogger struct{}
+// DefaultLogger is the default csmlog-backed implementation of Logger.
+type DefaultLogger struct{}
 
-// Info is a dummy implementation of logger Info method
-func (dl *DummyLogger) Info(_ context.Context, format string, args ...interface{}) {
-	log.Print("INFO: " + fmt.Sprintf(format, args...))
+// Info logs at info level, propagating context fields to csmlog.
+func (dl *DefaultLogger) Info(ctx context.Context, format string, args ...interface{}) {
+	log.WithContext(ctx).Infof(format, args...)
 }
 
-// Debug is a dummy implementation of logger Debug method
-func (dl *DummyLogger) Debug(_ context.Context, format string, args ...interface{}) {
-	log.Print("DEBUG: " + fmt.Sprintf(format, args...))
+// Debug logs at debug level, propagating context fields to csmlog.
+func (dl *DefaultLogger) Debug(ctx context.Context, format string, args ...interface{}) {
+	log.WithContext(ctx).Debugf(format, args...)
 }
 
-// Error is a dummy implementation of logger Error method
-func (dl *DummyLogger) Error(_ context.Context, format string, args ...interface{}) {
-	log.Print("ERROR: " + fmt.Sprintf(format, args...))
+// Error logs at error level, propagating context fields to csmlog.
+func (dl *DefaultLogger) Error(ctx context.Context, format string, args ...interface{}) {
+	log.WithContext(ctx).Errorf(format, args...)
 }
 
 // Info is a wrapper of logger Info method

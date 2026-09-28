@@ -98,3 +98,51 @@ func TestTtlCache(t *testing.T) {
 		assert.Equal(t, testValue, value.(string))
 	})
 }
+
+func Test_rateLock_Stop_coverage(t *testing.T) {
+	// Test to cover the rateLock.Stop() method for 100% coverage
+	r := newRateLock()
+	r.Stop() // This covers the rateLock.Stop() method
+}
+
+func TestTtlCache_Set_coverage(t *testing.T) {
+	// Test to cover the ttlCache.Set() method directly for 100% coverage
+	cache := newTTLCache(time.Second)
+	defer cache.Stop()
+
+	testKey := "direct_set_key"
+	testValue := "direct_set_value"
+
+	// Direct call to Set method (not SetWithTTL)
+	cache.Set(testKey, testValue)
+
+	value, found := cache.Get(testKey)
+	assert.True(t, found)
+	assert.Equal(t, testValue, value.(string))
+}
+
+func TestTtlCache_Stop_coverage(t *testing.T) {
+	// Test to cover the ttlCache.Stop() method for 100% coverage
+	cache := newTTLCache(time.Second)
+	cache.Stop() // This covers the ttlCache.Stop() method
+}
+
+func Test_ttlCache_purge_coverage(t *testing.T) {
+	// Test to improve coverage by calling purge directly
+	cache := newTTLCache(time.Millisecond * 10) // Very short TTL
+	defer cache.Stop()
+
+	// Add a key that will expire quickly
+	cache.Set("short_lived", "value")
+
+	// Wait for it to expire
+	time.Sleep(time.Millisecond * 20)
+
+	// Force purge to clean expired entries
+	cache.purge()
+
+	// Verify the expired key is gone
+	value, found := cache.Get("short_lived")
+	assert.False(t, found)
+	assert.Nil(t, value)
+}

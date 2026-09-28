@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	csmlog "github.com/dell/csmlog"
 	"github.com/dell/gobrick/internal/logger"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
 	intpowerpath "github.com/dell/gobrick/internal/powerpath"
@@ -37,7 +38,6 @@ import (
 	"github.com/dell/gobrick/pkg/powerpath"
 	"github.com/dell/gobrick/pkg/scsi"
 	"github.com/dell/gonvme"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sync/singleflight"
 )
@@ -190,7 +190,7 @@ func (c *NVMeConnector) ConnectVolume(ctx context.Context, info NVMeVolumeInfo, 
 	defer c.limiter.Release(1)
 	addDefaultNVMePortToVolumeInfoPortals(&info)
 
-	if err := c.validateNVMeVolumeInfo(ctx, info); err != nil {
+	if err := c.validateNVMeVolumeInfo(ctx, &info); err != nil {
 		return Device{}, err
 	}
 
@@ -282,16 +282,16 @@ func (c *NVMeConnector) cleanConnection(ctx context.Context, force bool, info NV
 
 	DevicePathsAndNamespaces, err := c.nvmeLib.ListNVMeDeviceAndNamespace()
 	if err != nil {
-		log.Errorf("Couldn't find the nvme namespaces %s", err.Error())
+		logger.Error(ctx, "Couldn't find the nvme namespaces %s", err.Error())
 	}
 	var devicePath string
 	var namespace string
-	log.Debugf("DevicePathsAndNamespaces: %s", DevicePathsAndNamespaces)
+	logger.Debug(ctx, "DevicePathsAndNamespaces: %s", DevicePathsAndNamespaces)
 	for _, DevicePathAndNamespace := range DevicePathsAndNamespaces {
 		devicePath = DevicePathAndNamespace.DevicePath
 		namespace = DevicePathAndNamespace.Namespace
 		nguid, newnamespace, _ := c.nvmeLib.GetNVMeDeviceData(devicePath)
-		log.Debugf("nguid: %s, wwn: %s, newnamespace: %s, namespace: %s", nguid, wwn, newnamespace, namespace)
+		logger.Debug(ctx, "nguid: %s, wwn: %s, newnamespace: %s, namespace: %s", nguid, wwn, newnamespace, namespace)
 		if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
 			devices = append(devices, devicePath)
 		}
@@ -468,15 +468,26 @@ func (c *NVMeConnector) connectMultipathDevice(
 	}
 }
 
-func (c *NVMeConnector) validateNVMeVolumeInfo(ctx context.Context, info NVMeVolumeInfo) error {
+func (c *NVMeConnector) validateNVMeVolumeInfo(ctx context.Context, info *NVMeVolumeInfo) error {
 	defer tracer.TraceFuncCall(ctx, "NVMeConnector.validateNVMeVolumeInfo")()
 	if len(info.Targets) == 0 {
 		return errors.New("at least one NVMe target required")
 	}
+	// Filter out incomplete entries (e.g. SDT portals whose NQN was not discovered
+	// due to PowerFlex NVMe zoning or transient unreachability at node startup)
+	// rather than hard-erroring on the first incomplete target. Only fail if no
+	// usable targets remain after filtering.
+	valid := make([]NVMeTargetInfo, 0, len(info.Targets))
 	for _, t := range info.Targets {
 		if t.Target == "" || t.Portal == "" {
-			return errors.New("invalid target info")
+			logger.Info(ctx, "NVMeConnector: skipping target with empty NQN or portal (portal=%q nqn=%q)", t.Portal, t.Target)
+			continue
 		}
+		valid = append(valid, t)
+	}
+	info.Targets = valid
+	if len(info.Targets) == 0 {
+		return errors.New("no valid NVMe targets: all entries have empty NQN or portal")
 	}
 
 	if info.WWN == "" {
@@ -498,17 +509,17 @@ func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, 
 
 		DevicePathsAndNamespaces, err := c.nvmeLib.ListNVMeDeviceAndNamespace()
 		if err != nil {
-			log.Errorf("Couldn't find the nvme namespaces %s", err.Error())
+			logger.Error(ctx, "Couldn't find the nvme namespaces %s", err.Error())
 		}
 		var devicePaths []string
 		var devicePath string
 		var namespace string
-		log.Debugf("DevicePathsAndNamespaces %+v retryCount %d", DevicePathsAndNamespaces, retryCount)
+		logger.Debug(ctx, "DevicePathsAndNamespaces %+v retryCount %d", DevicePathsAndNamespaces, retryCount)
 		for _, DevicePathAndNamespace := range DevicePathsAndNamespaces {
 			devicePath = DevicePathAndNamespace.DevicePath
 			namespace = DevicePathAndNamespace.Namespace
 			nguid, newnamespace, _ := c.nvmeLib.GetNVMeDeviceData(devicePath)
-			log.Debugf("nguid %s, wwn %s, newnamespace %s, namespace %s", nguid, wwn, newnamespace, namespace)
+			logger.Debug(ctx, "nguid %s, wwn %s, newnamespace %s, namespace %s", nguid, wwn, newnamespace, namespace)
 			if c.wwnMatches(nguid, wwn) && namespace == newnamespace {
 				devicePaths = append(devicePaths, devicePath)
 				nguidResult = nguid
@@ -525,7 +536,7 @@ func (c *NVMeConnector) discoverDevice(ctx context.Context, wg *sync.WaitGroup, 
 		}
 		err = c.tryNVMeConnect(ctx, info, useFC)
 		if err != nil {
-			log.Errorf("Couldn't perform duplicate NVMe connect")
+			logger.Error(ctx, "Couldn't perform duplicate NVMe connect")
 		}
 		retryCount = retryCount + 1
 	}
@@ -568,14 +579,14 @@ func (c *NVMeConnector) wwnMatches(nguid, wwn string) bool {
 	if strings.HasPrefix(wwn, PowerStoreOUIPrefix) {
 		token1 = wwn[13 : len(wwn)-7]
 		token2 = wwn[len(wwn)-6 : len(wwn)-1]
-		log.Infof("PowerStore: %s %s %s %t", token1, token2, nguid, strings.Contains(nguid, token2))
+		csmlog.Debugf("PowerStore: %s %s %s %t", token1, token2, nguid, strings.Contains(nguid, token2))
 		if strings.Contains(nguid, token1) && strings.Contains(nguid, token2) {
 			return true
 		}
 	} else if strings.HasPrefix(wwn, PowerMaxOUIPrefix) {
 		token1 = wwn[16:]
 		token2 = wwn[1:7]
-		log.Infof("Powermax: %s %s %s %t", token1, token2, nguid, strings.HasPrefix(nguid, token1+token2))
+		csmlog.Debugf("Powermax: %s %s %s %t", token1, token2, nguid, strings.HasPrefix(nguid, token1+token2))
 		if strings.HasPrefix(nguid, token1+token2) {
 			return true
 		}
@@ -593,7 +604,7 @@ func (c *NVMeConnector) tryNVMeConnect(ctx context.Context, info NVMeVolumeInfo,
 	if useFC {
 		FCHostsInfo, err := c.getFCHostInfo(ctx)
 		if err != nil {
-			log.Errorf("Error gathering NVMe/FC Hosts on the host side: %v", err)
+			logger.Error(ctx, "Error gathering NVMe/FC Hosts on the host side: %v", err)
 			return err
 		}
 
@@ -603,7 +614,7 @@ func (c *NVMeConnector) tryNVMeConnect(ctx context.Context, info NVMeVolumeInfo,
 				tgt := gonvme.NVMeTarget{Portal: t.Portal, TargetNqn: t.Target, HostAdr: hostAddress}
 				err = c.nvmeLib.NVMeFCConnect(tgt, true)
 				if err != nil {
-					log.Errorf("Couldn't connect to NVMeFC target")
+					logger.Error(ctx, "Couldn't connect to NVMeFC target")
 					continue
 				}
 				return nil
@@ -700,14 +711,14 @@ func (c *NVMeConnector) getFCHostInfo(ctx context.Context) ([]FCHBAInfo, error) 
 		var FCHostInfo FCHBAInfo
 		data, err := c.os.ReadFile(path.Join(m, "port_name"))
 		if err != nil {
-			log.Errorf("match: %s failed to read port_name file: %s", match, err.Error())
+			logger.Error(ctx, "match: %s failed to read port_name file: %s", match, err.Error())
 			continue
 		}
 		FCHostInfo.PortName = strings.TrimSpace(string(data))
 
 		data, err = c.os.ReadFile(path.Join(m, "node_name"))
 		if err != nil {
-			log.Errorf("match: %s failed to read node_name file: %s", match, err.Error())
+			logger.Error(ctx, "match: %s failed to read node_name file: %s", match, err.Error())
 			continue
 		}
 		FCHostInfo.NodeName = strings.TrimSpace(string(data))

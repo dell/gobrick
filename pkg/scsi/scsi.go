@@ -30,8 +30,6 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
@@ -561,7 +559,7 @@ func (s *Scsi) waitUdevSymlink(ctx context.Context, deviceName string, wwn strin
 		logger.Info(ctx, "%s", msg)
 		return errors.New(msg)
 	}
-	log.Debugf("check path: %s, symlink: %s for wwn: %s", checkPath, symlink, wwn)
+	logger.Debug(ctx, "check path: %s, symlink: %s for wwn: %s", checkPath, symlink, wwn)
 	if d := strings.Replace(symlink, "/dev/", "", 1); d != deviceName {
 		msg := fmt.Sprintf("udev symlink point to unexpected device: %s", d)
 		logger.Info(ctx, "%s", msg)

@@ -25,6 +25,7 @@ import (
 
 	"github.com/dell/gonvme"
 
+	"github.com/dell/gobrick/internal/mockhelper"
 	mh "github.com/dell/gobrick/internal/mockhelper"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
 	intscsi "github.com/dell/gobrick/internal/scsi"
@@ -431,6 +432,51 @@ func TestNVME_Connector_DisconnectVolume(t *testing.T) {
 			args:    args{ctx: ctx, info: NVMeVolumeInfo{}},
 			wantErr: false,
 		},
+		{
+			name:   "Error in GetNVMeDeviceData",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.nvmeLib.EXPECT().ListNVMeDeviceAndNamespace().Return(validDevicePathsAndNamespacesWithTwoDevices, nil).AnyTimes()
+				fields.nvmeLib.EXPECT().GetNVMeDeviceData(gomock.Any()).Return("", "", errors.New("device data error")).AnyTimes()
+			},
+			args:    args{ctx: ctx, info: NVMeVolumeInfo{}},
+			wantErr: false,
+		},
+		{
+			name:   "empty device paths",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.nvmeLib.EXPECT().ListNVMeDeviceAndNamespace().Return([]gonvme.DevicePathAndNamespace{}, nil).AnyTimes()
+			},
+			args:    args{ctx: ctx, info: NVMeVolumeInfo{}},
+			wantErr: false,
+		},
+		{
+			name:   "device found and disconnected",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.nvmeLib.EXPECT().ListNVMeDeviceAndNamespace().Return(validDevicePathsAndNamespacesWithTwoDevices, nil).AnyTimes()
+				fields.nvmeLib.EXPECT().GetNVMeDeviceData(gomock.Any()).Return("0f8da909812540628ccf09680039914f", "ns1", nil).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return(mockhelper.ValidWWID, nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    args{ctx: ctx, info: NVMeVolumeInfo{WWN: mockhelper.ValidWWID}},
+			wantErr: false,
+		},
+		{
+			name:   "flush device error",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.nvmeLib.EXPECT().ListNVMeDeviceAndNamespace().Return(validDevicePathsAndNamespacesWithTwoDevices, nil).AnyTimes()
+				fields.nvmeLib.EXPECT().GetNVMeDeviceData(gomock.Any()).Return("0f8da909812540628ccf09680039914f", "ns1", nil).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return(mockhelper.ValidWWID, nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+			},
+			args:    args{ctx: ctx, info: NVMeVolumeInfo{WWN: mockhelper.ValidWWID}},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -549,6 +595,47 @@ func TestNVME_Connector_DisconnectVolumeByDeviceName(t *testing.T) {
 				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    args{ctx: ctx, name: mh.ValidDeviceName},
+			wantErr: false,
+		},
+		{
+			name:   "successful disconnection with WWN",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), gomock.Any()).Return(mh.ValidWWID, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{mh.ValidDeviceName}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    args{ctx: ctx, name: mh.ValidDeviceName},
+			wantErr: false,
+		},
+		{
+			name:   "GetDMDeviceByChildren error",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), gomock.Any()).Return(mh.ValidWWID, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{mh.ValidDeviceName}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("dm error")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    args{ctx: ctx, name: mh.ValidDeviceName},
+			wantErr: false,
+		},
+		{
+			name:   "empty devices by WWN",
+			fields: getDefaultNVMEFields(ctrl),
+			stateSetter: func(fields NVMEFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), gomock.Any()).Return(mh.ValidWWID, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("no dm")).AnyTimes()
 			},
 			args:    args{ctx: ctx, name: mh.ValidDeviceName},
 			wantErr: false,
@@ -833,6 +920,24 @@ func TestNVME_readNVMeDevicesFromResultCH(t *testing.T) {
 			expectedPaths: []string{"nvme0n1", "nvme1n1"},
 			expectedNguid: "test-nguid-2",
 		},
+		{
+			name: "Empty device paths",
+			devicePathResult: DevicePathResult{
+				devicePaths: []string{},
+				nguid:       "test-nguid-3",
+			},
+			expectedPaths: nil,
+			expectedNguid: "test-nguid-3",
+		},
+		{
+			name: "Empty nguid",
+			devicePathResult: DevicePathResult{
+				devicePaths: []string{"/dev/nvme0n1"},
+				nguid:       "",
+			},
+			expectedPaths: []string{"nvme0n1"},
+			expectedNguid: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -845,6 +950,57 @@ func TestNVME_readNVMeDevicesFromResultCH(t *testing.T) {
 			}
 			if gotNguid != tt.expectedNguid {
 				t.Errorf("readNVMeDevicesFromResultCH() gotNguid = %v, expectedNguid %v", gotNguid, tt.expectedNguid)
+			}
+		})
+	}
+}
+
+func TestNVMe_readNVMeDevicesFromResultCH(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name          string
+		ch            chan DevicePathResult
+		existingPaths []string
+		expectedPaths []string
+		expectedNGUID string
+	}{
+		{
+			name:          "context canceled",
+			ch:            make(chan DevicePathResult),
+			existingPaths: []string{},
+			expectedPaths: nil,
+			expectedNGUID: "",
+		},
+		{
+			name: "channel with data",
+			ch: func() chan DevicePathResult {
+				ch := make(chan DevicePathResult, 1)
+				ch <- DevicePathResult{
+					devicePaths: []string{"/dev/nvme0n1", "/dev/nvme1n1"},
+					nguid:       "test-nguid",
+				}
+				return ch
+			}(),
+			existingPaths: []string{},
+			expectedPaths: []string{"nvme0n1", "nvme1n1"},
+			expectedNGUID: "test-nguid",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Cancel context for the first test case
+			testCtx := ctx
+			if tt.name == "context canceled" {
+				var cancel context.CancelFunc
+				testCtx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			paths, nguid := readNVMeDevicesFromResultCH(testCtx, tt.ch, tt.existingPaths)
+			if !reflect.DeepEqual(paths, tt.expectedPaths) {
+				t.Errorf("readNVMeDevicesFromResultCH() paths = %v, want %v", paths, tt.expectedPaths)
+			}
+			if nguid != tt.expectedNGUID {
+				t.Errorf("readNVMeDevicesFromResultCH() nguid = %v, want %v", nguid, tt.expectedNGUID)
 			}
 		})
 	}
@@ -945,6 +1101,91 @@ func TestNVME_Connector_getFCHostInfo(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("getFCHostInfo() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateNVMeVolumeInfo_EmptyTarget(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fields := getDefaultNVMEFields(ctrl)
+	c := &NVMeConnector{
+		baseConnector:             fields.baseConnector,
+		multipath:                 fields.multipath,
+		scsi:                      fields.scsi,
+		nvmeLib:                   fields.nvmeLib,
+		filePath:                  fields.filePath,
+		os:                        fields.os,
+		manualSessionManagement:   fields.manualSessionManagement,
+		waitDeviceTimeout:         fields.waitDeviceTimeout,
+		waitDeviceRegisterTimeout: fields.waitDeviceRegisterTimeout,
+		loginLock:                 fields.loginLock,
+		limiter:                   fields.limiter,
+		singleCall:                fields.singleCall,
+	}
+
+	// emptyNQNTarget simulates a PowerFlex SDT portal whose NQN was not discovered
+	// (e.g. due to NVMe zoning blocking discovery packets at node startup).
+	emptyNQNTarget := NVMeTargetInfo{Portal: "10.10.1.3:4420", Target: ""}
+
+	tests := []struct {
+		name        string
+		info        NVMeVolumeInfo
+		wantErr     bool
+		wantErrMsg  string
+		wantTargets []NVMeTargetInfo
+	}{
+		{
+			name:       "empty Targets slice",
+			info:       NVMeVolumeInfo{Targets: []NVMeTargetInfo{}, WWN: validNQN},
+			wantErr:    true,
+			wantErrMsg: "at least one NVMe target required",
+		},
+		{
+			name: "all empty NQN targets",
+			info: NVMeVolumeInfo{
+				Targets: []NVMeTargetInfo{emptyNQNTarget, {Portal: "10.10.1.4:4420", Target: ""}},
+				WWN:     validNQN,
+			},
+			wantErr:    true,
+			wantErrMsg: "no valid NVMe targets: all entries have empty NQN or portal",
+		},
+		{
+			name: "mix of valid and empty-NQN targets",
+			info: NVMeVolumeInfo{
+				Targets: []NVMeTargetInfo{validNVMETargetInfo1, validNVMETargetInfo2, emptyNQNTarget},
+				WWN:     validNQN,
+			},
+			wantErr:     false,
+			wantTargets: []NVMeTargetInfo{validNVMETargetInfo1, validNVMETargetInfo2},
+		},
+		{
+			name: "all valid targets",
+			info: NVMeVolumeInfo{
+				Targets: []NVMeTargetInfo{validNVMETargetInfo1, validNVMETargetInfo2},
+				WWN:     validNQN,
+			},
+			wantErr:     false,
+			wantTargets: []NVMeTargetInfo{validNVMETargetInfo1, validNVMETargetInfo2},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := tt.info
+			err := c.validateNVMeVolumeInfo(ctx, &info)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateNVMeVolumeInfo() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && tt.wantErrMsg != "" && err.Error() != tt.wantErrMsg {
+				t.Errorf("validateNVMeVolumeInfo() error message = %q, want %q", err.Error(), tt.wantErrMsg)
+			}
+			if !tt.wantErr && tt.wantTargets != nil && !reflect.DeepEqual(info.Targets, tt.wantTargets) {
+				t.Errorf("validateNVMeVolumeInfo() info.Targets = %v, want %v", info.Targets, tt.wantTargets)
 			}
 		})
 	}

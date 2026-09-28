@@ -28,7 +28,6 @@ import (
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/tracer"
 	"github.com/dell/gobrick/pkg/scsi"
-	log "github.com/sirupsen/logrus"
 )
 
 // RDMVolumeInfo has request info for RDM device
@@ -114,10 +113,10 @@ func (fc *FCConnector) rescanAllHosts(ctx context.Context) error {
 	hostsDir := "/sys/class/scsi_host"
 	hostFiles, err := os.ReadDir(fmt.Sprintf("%s/", hostsDir))
 	if err != nil {
-		log.Errorf("rescanSCSIHOSTALL failed to read scsi_host dir, err: %s", err.Error())
+		logger.Error(ctx, "rescanSCSIHOSTALL failed to read scsi_host dir, err: %s", err.Error())
 		return err
 	}
-	log.Infof("found (%d) files in hostsDir (%s)", len(hostFiles), hostsDir)
+	logger.Info(ctx, "found (%d) files in hostsDir (%s)", len(hostFiles), hostsDir)
 	scsiHost := scsi.NewSCSI("")
 	for host := 0; host < len(hostFiles); host++ {
 		// at least one target port not found, do full scsi rescan
@@ -129,7 +128,7 @@ func (fc *FCConnector) rescanAllHosts(ctx context.Context) error {
 		}
 		err := scsiHost.RescanSCSIHostByHCTL(ctx, hctl)
 		if err != nil {
-			log.Error(ctx, err.Error())
+			logger.Error(ctx, "rescanSCSIHOSTALL error: %s", err.Error())
 			continue
 		}
 	}

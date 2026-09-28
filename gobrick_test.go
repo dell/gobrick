@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/dell/gobrick/internal/logger"
 	"github.com/dell/gobrick/internal/mockhelper"
@@ -95,7 +96,7 @@ func (tl *testLogger) Error(_ context.Context, format string, args ...interface{
 
 func TestSetLogger(t *testing.T) {
 	SetLogger(&testLogger{})
-	defer SetLogger(&logger.DummyLogger{})
+	defer SetLogger(&logger.DefaultLogger{})
 	ctx := context.Background()
 	logger.Info(ctx, msg1, arg1)
 	logger.Error(ctx, msg2)
@@ -117,4 +118,43 @@ type testTracer struct{}
 
 func (tt *testTracer) Trace(_ context.Context, format string, args ...interface{}) {
 	traceData = append(traceData, fmt.Sprintf(format, args...))
+}
+
+func TestSetTimeouts(t *testing.T) {
+	tests := []struct {
+		name       string
+		prop       *time.Duration
+		value      time.Duration
+		defaultVal time.Duration
+		want       time.Duration
+	}{
+		{
+			name:       "zero value uses default",
+			prop:       new(time.Duration),
+			value:      0,
+			defaultVal: time.Second * 30,
+			want:       time.Second * 30,
+		},
+		{
+			name:       "non-zero value uses provided value",
+			prop:       new(time.Duration),
+			value:      time.Second * 60,
+			defaultVal: time.Second * 30,
+			want:       time.Second * 60,
+		},
+		{
+			name:       "existing prop is updated",
+			prop:       func() *time.Duration { d := time.Second * 10; return &d }(),
+			value:      time.Second * 45,
+			defaultVal: time.Second * 30,
+			want:       time.Second * 45,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setTimeouts(tt.prop, tt.value, tt.defaultVal)
+			assert.Equal(t, tt.want, *tt.prop)
+		})
+	}
 }

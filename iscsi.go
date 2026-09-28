@@ -23,14 +23,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"os/exec"
 	"path"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/dell/gobrick/internal/logger"
 	intmultipath "github.com/dell/gobrick/internal/multipath"
@@ -269,7 +268,14 @@ func (c *ISCSIConnector) GetInitiatorName(ctx context.Context) ([]string, error)
 
 func addDefaultISCSIPortToVolumeInfoPortals(info *ISCSIVolumeInfo) {
 	for i, t := range info.Targets {
-		if !strings.Contains(t.Portal, ":") {
+		// If already contains a port (host:port or [host]:port) leave it as-is.
+		if _, _, err := net.SplitHostPort(t.Portal); err == nil {
+			continue
+		}
+		// For IPv6 without brackets, add brackets + default port.
+		if ip := net.ParseIP(t.Portal); ip != nil && strings.Contains(t.Portal, ":") {
+			info.Targets[i].Portal = net.JoinHostPort(ip.String(), "3260")
+		} else {
 			info.Targets[i].Portal += ":3260"
 		}
 	}
@@ -458,7 +464,7 @@ func (c *ISCSIConnector) connectPowerpathDevice(
 			if err != nil {
 				logger.Debug(ctx, "failed to get powerpath device: %s", err.Error())
 			}
-			log.Debugf("pp device: %s devices: %+v", ppath, devices)
+			logger.Debug(ctx, "pp device: %s devices: %+v", ppath, devices)
 		}
 		if ppath != "" {
 			if err := c.scsi.WaitUdevSymlink(ctx, ppath, wwn); err == nil {
@@ -800,6 +806,18 @@ func (c *ISCSIConnector) isISCSISessionActive(
 		session.ISCSIConnectionState == goiscsi.ISCSIConnectionStateLOGGEDIN
 }
 
+func normalizeISCSIPortal(portal string) string {
+	if ip := net.ParseIP(portal); ip != nil {
+		return net.JoinHostPort(ip.String(), "3260")
+	}
+
+	host, port, err := net.SplitHostPort(portal)
+	if err != nil || net.ParseIP(host) == nil {
+		return portal
+	}
+	return net.JoinHostPort(net.ParseIP(host).String(), port)
+}
+
 func (c *ISCSIConnector) getSessionByTargetInfo(ctx context.Context,
 	target ISCSITargetInfo,
 ) (goiscsi.ISCSISession, bool, error) {
@@ -812,8 +830,9 @@ func (c *ISCSIConnector) getSessionByTargetInfo(ctx context.Context,
 		return r, false, err
 	}
 	var found bool
+	targetPortal := normalizeISCSIPortal(target.Portal)
 	for _, s := range sessions {
-		if s.Target == target.Target && s.Portal == target.Portal {
+		if s.Target == target.Target && normalizeISCSIPortal(s.Portal) == targetPortal {
 			r = s
 			found = true
 			break

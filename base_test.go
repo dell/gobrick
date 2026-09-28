@@ -397,8 +397,18 @@ func BaseConnectorCleanMultiPathDeviceMock(mock *baseMockHelper,
 	mock.SCSIGetDMDeviceByChildrenOKReturn = mh.ValidDMName
 	mock.SCSIGetDMDeviceByChildrenOK(scsi)
 
+	mock.MultipathGetDMWWIDCallMapName = mh.ValidDMName
+	mock.MultipathGetDMWWIDOKReturn = mh.ValidWWID
+	mock.MultipathGetDMWWIDOK(mp).AnyTimes()
+
 	mock.MultipathFlushDeviceCallMapName = mh.ValidDMPath
-	mock.MultipathFlushDeviceOK(mp)
+	mock.MultipathFlushDeviceOK(mp).AnyTimes()
+
+	mock.SCSIIsDeviceExistCallDevice = mh.ValidDMName
+	mock.SCSIIsDeviceExistOKReturn = false
+	mock.SCSIIsDeviceExistOK(scsi).AnyTimes()
+
+	mp.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	mock.SCSIDeleteSCSIDeviceByNameCallName = mh.ValidDeviceName
 	mock.SCSIDeleteSCSIDeviceByNameOK(scsi)
@@ -458,6 +468,7 @@ func getTestBaseConnector(ctrl *gomock.Controller) BaseConnectorFields {
 	scsi := intscsi.NewMockSCSI(ctrl)
 	mp := intmultipath.NewMockMultipath(ctrl)
 	pp := intpowerpath.NewMockPowerpath(ctrl)
+	pp.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
 	return BaseConnectorFields{
 		multipath: mp,
 		powerpath: pp,
@@ -607,6 +618,71 @@ func TestDisconnectDevicesByWWN(t *testing.T) {
 			},
 			expectedError: "",
 		},
+		{
+			name: "GetMultipathNameAndPaths error",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567894",
+			},
+			setupMocks: func() {
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				mp.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("", []string{}, errors.New("multipath error")).AnyTimes()
+			},
+			expectedError: "",
+		},
+		{
+			name: "GetDMDeviceByChildren error",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567895",
+			},
+			setupMocks: func() {
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				mp.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("mpath-name", []string{"path1", "path2"}, nil).AnyTimes()
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"path1", "path2"}).Return("", errors.New("dm device error")).AnyTimes()
+			},
+			expectedError: "",
+		},
+		{
+			name: "empty paths",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567896",
+			},
+			setupMocks: func() {
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				mp.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("mpath-name", []string{}, nil).AnyTimes()
+			},
+			expectedError: "",
+		},
+		{
+			name: "Powerpath daemon running",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567894",
+			},
+			setupMocks: func() {
+				pp.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				pp.EXPECT().FlushDevice(gomock.Any()).Return(nil).AnyTimes()
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+				s.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{"path1"}, nil).AnyTimes()
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"path1"}).Return("", nil).AnyTimes()
+				s.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "path1").Return(nil).AnyTimes()
+			},
+			expectedError: "",
+		},
+		{
+			name: "no devices found when daemon running",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567897",
+			},
+			setupMocks: func() {
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				mp.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("", nil, errors.New(noDevicesFound)).AnyTimes()
+			},
+			expectedError: "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -626,20 +702,6 @@ func TestDisconnectDevicesByWWN(t *testing.T) {
 }
 
 func TestDisconnectDevicesByWWNNoMultipathError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mp := intmultipath.NewMockMultipath(ctrl)
-	pp := intpowerpath.NewMockPowerpath(ctrl)
-	s := intscsi.NewMockSCSI(ctrl)
-
-	bc := &baseConnector{
-		multipath:             mp,
-		powerpath:             pp,
-		scsi:                  s,
-		multipathFlushRetries: 1,
-	}
-
 	type args struct {
 		ctx context.Context
 		wwn string
@@ -648,7 +710,7 @@ func TestDisconnectDevicesByWWNNoMultipathError(t *testing.T) {
 	tests := []struct {
 		name          string
 		args          args
-		setupMocks    func()
+		setupMocks    func(mp *intmultipath.MockMultipath, pp *intpowerpath.MockPowerpath, s *intscsi.MockSCSI)
 		expectedError string
 	}{
 		{
@@ -657,17 +719,54 @@ func TestDisconnectDevicesByWWNNoMultipathError(t *testing.T) {
 				ctx: context.Background(),
 				wwn: "1234567892",
 			},
-			setupMocks: func() {
+			setupMocks: func(mp *intmultipath.MockMultipath, _ *intpowerpath.MockPowerpath, s *intscsi.MockSCSI) {
 				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
 				s.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to find devices by wwn")).AnyTimes()
 			},
 			expectedError: "failed to find devices by wwn",
 		},
+		{
+			name: "Error in GetDMDeviceByChildren",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567893",
+			},
+			setupMocks: func(mp *intmultipath.MockMultipath, _ *intpowerpath.MockPowerpath, s *intscsi.MockSCSI) {
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+				s.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{"path1"}, nil).AnyTimes()
+				s.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "path1").Return(nil).AnyTimes()
+			},
+			expectedError: "",
+		},
+		{
+			name: "Error in DeleteSCSIDeviceByName",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567894",
+			},
+			setupMocks: func(mp *intmultipath.MockMultipath, _ *intpowerpath.MockPowerpath, s *intscsi.MockSCSI) {
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+				s.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{"path1"}, nil).AnyTimes()
+				s.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "path1").Return(errors.New("delete error")).AnyTimes()
+			},
+			expectedError: "delete error",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mp := intmultipath.NewMockMultipath(ctrl)
+			pp := intpowerpath.NewMockPowerpath(ctrl)
+			s := intscsi.NewMockSCSI(ctrl)
+			bc := &baseConnector{
+				multipath:             mp,
+				powerpath:             pp,
+				scsi:                  s,
+				multipathFlushRetries: 1,
+			}
+			tt.setupMocks(mp, pp, s)
 
 			err := bc.disconnectDevicesByWWN(tt.args.ctx, tt.args.wwn)
 
@@ -677,6 +776,58 @@ func TestDisconnectDevicesByWWNNoMultipathError(t *testing.T) {
 				t.Errorf("expected error %v, got nil", tt.expectedError)
 			} else if err != nil && tt.expectedError != "" && err.Error() != tt.expectedError {
 				t.Errorf("expected error %v, got %v", tt.expectedError, err)
+			}
+		})
+	}
+}
+
+func TestBaseConnector_cleanMultipathDeviceByName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mp := intmultipath.NewMockMultipath(ctrl)
+
+	bc := &baseConnector{
+		multipath:             mp,
+		multipathFlushRetries: 3,
+		multipathFlushTimeout: time.Second * 10,
+	}
+
+	tests := []struct {
+		name       string
+		setupMocks func()
+		wantErr    bool
+	}{
+		{
+			name: "flush succeeds on first try",
+			setupMocks: func() {
+				mp.EXPECT().FlushDevice(gomock.Any(), "mpatha").Return(nil).Times(1)
+			},
+			wantErr: false,
+		},
+		{
+			name: "flush succeeds on retry",
+			setupMocks: func() {
+				mp.EXPECT().FlushDevice(gomock.Any(), "mpatha").Return(errors.New("flush error")).Times(2)
+				mp.EXPECT().FlushDevice(gomock.Any(), "mpatha").Return(nil).Times(1)
+			},
+			wantErr: false,
+		},
+		{
+			name: "flush fails after all retries",
+			setupMocks: func() {
+				mp.EXPECT().FlushDevice(gomock.Any(), "mpatha").Return(errors.New("flush error")).Times(3)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMocks()
+			err := bc.cleanMultipathDeviceByName(context.Background(), "mpatha")
+			if (err != nil) != tt.wantErr {
+				t.Errorf("cleanMultipathDeviceByName() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -721,6 +872,36 @@ func TestDisconnectDevicesByWWNNoMultipathSuccess(t *testing.T) {
 			},
 			expectedError: "",
 		},
+		{
+			name: "GetDMDeviceByChildren returns device",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567893",
+			},
+			setupMocks: func() {
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+				s.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{"path1"}, nil).AnyTimes()
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"path1"}).Return("dm-device", nil).AnyTimes()
+				mp.EXPECT().FlushDevice(gomock.Any(), "dm-device").Return(nil).AnyTimes()
+				s.EXPECT().IsDeviceExist(gomock.Any(), "path1").Return(true).AnyTimes()
+				s.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "path1").Return(nil).AnyTimes()
+			},
+			expectedError: "",
+		},
+		{
+			name: "device does not exist",
+			args: args{
+				ctx: context.Background(),
+				wwn: "1234567894",
+			},
+			setupMocks: func() {
+				mp.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+				s.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{"path1"}, nil).AnyTimes()
+				s.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"path1"}).Return("", nil).AnyTimes()
+				s.EXPECT().IsDeviceExist(gomock.Any(), "path1").Return(false).AnyTimes()
+			},
+			expectedError: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -741,9 +922,6 @@ func TestDisconnectDevicesByWWNNoMultipathSuccess(t *testing.T) {
 }
 
 func TestDisconnectDevicesByDeviceName(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	type args struct {
 		ctx        context.Context
 		DeviceName string
@@ -752,7 +930,6 @@ func TestDisconnectDevicesByDeviceName(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        args
-		fields      BaseConnectorFields
 		stateSetter func(fields BaseConnectorFields)
 		expectedErr bool
 	}{
@@ -762,7 +939,6 @@ func TestDisconnectDevicesByDeviceName(t *testing.T) {
 				ctx:        context.Background(),
 				DeviceName: "non-existent-device",
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
 			},
@@ -774,11 +950,10 @@ func TestDisconnectDevicesByDeviceName(t *testing.T) {
 				ctx:        context.Background(),
 				DeviceName: deviceMapperPrefix + "test-device",
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
-				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true)
-				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, nil)
-				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return("", errors.New("failed to read WWN for DM"))
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return("", errors.New("failed to read WWN for DM")).AnyTimes()
 			},
 			expectedErr: true,
 		},
@@ -788,11 +963,10 @@ func TestDisconnectDevicesByDeviceName(t *testing.T) {
 				ctx:        context.Background(),
 				DeviceName: "test-device",
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return("test-wwn", nil).AnyTimes()
-				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to find devices by wwn"))
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to find devices by wwn")).AnyTimes()
 			},
 			expectedErr: true,
 		},
@@ -800,13 +974,16 @@ func TestDisconnectDevicesByDeviceName(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
 			bc := &baseConnector{
-				multipath: test.fields.multipath,
-				powerpath: test.fields.powerpath,
-				scsi:      test.fields.scsi,
+				multipath: fields.multipath,
+				powerpath: fields.powerpath,
+				scsi:      fields.scsi,
 			}
 
-			test.stateSetter(test.fields)
+			test.stateSetter(fields)
 
 			err := bc.disconnectDevicesByDeviceName(test.args.ctx, test.args.DeviceName)
 
@@ -819,9 +996,6 @@ func TestDisconnectDevicesByDeviceName(t *testing.T) {
 }
 
 func TestCleanDevicesByMpathInfo(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	type args struct {
 		ctx   context.Context
 		force bool
@@ -831,7 +1005,6 @@ func TestCleanDevicesByMpathInfo(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        args
-		fields      BaseConnectorFields
 		stateSetter func(fields BaseConnectorFields)
 		expectedErr bool
 	}{
@@ -846,7 +1019,6 @@ func TestCleanDevicesByMpathInfo(t *testing.T) {
 					mpathName: "mpatha",
 				},
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				fields.multipath.EXPECT().GetMpathMinorByMpathName(gomock.Any(), gomock.Any()).Return("", true, errors.New("failed to verify multipath device existence")).AnyTimes()
@@ -864,7 +1036,6 @@ func TestCleanDevicesByMpathInfo(t *testing.T) {
 					mpathName: "mpatha",
 				},
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				fields.multipath.EXPECT().GetMpathMinorByMpathName(gomock.Any(), gomock.Any()).Return("", true, errors.New("failed to verify multipath device existence")).AnyTimes()
@@ -881,24 +1052,128 @@ func TestCleanDevicesByMpathInfo(t *testing.T) {
 					sdDisks: []string{"path1"},
 				},
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			},
 			expectedErr: false,
 		},
+		{
+			name: "force cleanup on multipath flush error",
+			args: args{
+				ctx:   context.Background(),
+				force: true,
+				req: &cleanVolumeReq{
+					wwn:       "1234567892",
+					sdDisks:   []string{"path1"},
+					mpathName: "mpatha",
+				},
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+				fields.multipath.EXPECT().GetMpathMinorByMpathName(gomock.Any(), gomock.Any()).Return("", false, nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			expectedErr: false,
+		},
+		{
+			name: "force cleanup on verification error",
+			args: args{
+				ctx:   context.Background(),
+				force: true,
+				req: &cleanVolumeReq{
+					wwn:       "1234567892",
+					sdDisks:   []string{"path1"},
+					mpathName: "mpatha",
+				},
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().GetMpathMinorByMpathName(gomock.Any(), gomock.Any()).Return("", true, errors.New("verification error")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			expectedErr: false,
+		},
+		{
+			name: "empty sdDisks",
+			args: args{
+				ctx:   context.Background(),
+				force: false,
+				req: &cleanVolumeReq{
+					wwn:     "1234567893",
+					sdDisks: []string{},
+				},
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			expectedErr: false,
+		},
+		{
+			name: "delete SCSI device error",
+			args: args{
+				ctx:   context.Background(),
+				force: false,
+				req: &cleanVolumeReq{
+					wwn:     "1234567894",
+					sdDisks: []string{"path1"},
+				},
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(errors.New("delete error")).AnyTimes()
+			},
+			expectedErr: true,
+		},
+		{
+			name: "multipath device exists",
+			args: args{
+				ctx:   context.Background(),
+				force: false,
+				req: &cleanVolumeReq{
+					wwn:       "1234567895",
+					sdDisks:   []string{"path1"},
+					mpathName: "mpatha",
+				},
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().GetMpathMinorByMpathName(gomock.Any(), "mpatha").Return("minor", false, nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			expectedErr: false,
+		},
+		{
+			name: "GetMpathMinorByMpathName error only (not exist)",
+			args: args{
+				ctx:   context.Background(),
+				force: false,
+				req: &cleanVolumeReq{
+					wwn:       "1234567896",
+					sdDisks:   []string{"path1"},
+					mpathName: "mpatha",
+				},
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().GetMpathMinorByMpathName(gomock.Any(), "mpatha").Return("", false, errors.New("minor error")).AnyTimes()
+			},
+			expectedErr: true,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
 			bc := &baseConnector{
-				multipath: test.fields.multipath,
-				powerpath: test.fields.powerpath,
-				scsi:      test.fields.scsi,
+				multipath:             fields.multipath,
+				powerpath:             fields.powerpath,
+				scsi:                  fields.scsi,
+				multipathFlushRetries: 1,
 			}
 
-			test.stateSetter(test.fields)
+			test.stateSetter(fields)
 
 			err := bc.cleanDevicesByMpathInfo(test.args.ctx, test.args.force, test.args.req)
 
@@ -911,9 +1186,6 @@ func TestCleanDevicesByMpathInfo(t *testing.T) {
 }
 
 func TestCleanNVMeDevices(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	type args struct {
 		ctx     context.Context
 		Force   bool
@@ -924,7 +1196,6 @@ func TestCleanNVMeDevices(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        args
-		fields      BaseConnectorFields
 		stateSetter func(fields BaseConnectorFields)
 		expectedErr bool
 	}{
@@ -936,13 +1207,12 @@ func TestCleanNVMeDevices(t *testing.T) {
 				Devices: []string{},
 				WWN:     "",
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
-				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil)
-				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("failed to flush multipath device"))
-				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false)
-				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(errors.New("failed to remove wwid"))
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("failed to flush multipath device")).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(errors.New("failed to remove wwid")).AnyTimes()
 			},
 			expectedErr: false,
 		},
@@ -954,12 +1224,11 @@ func TestCleanNVMeDevices(t *testing.T) {
 				Devices: []string{},
 				WWN:     "",
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
-				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil)
-				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("failed to flush multipath device"))
-				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true)
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("failed to flush multipath device")).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 			},
 			expectedErr: true,
 		},
@@ -974,7 +1243,6 @@ func TestCleanNVMeDevices(t *testing.T) {
 				},
 				WWN: "",
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("failed to GetDMDeviceByChildren")).AnyTimes()
 				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(errors.New("can't delete block device")).AnyTimes()
@@ -992,7 +1260,6 @@ func TestCleanNVMeDevices(t *testing.T) {
 				},
 				WWN: "",
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("test-name", errors.New("failed to GetDMDeviceByChildren")).AnyTimes()
 				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
@@ -1004,14 +1271,17 @@ func TestCleanNVMeDevices(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
 			bc := &baseConnector{
-				multipath:             test.fields.multipath,
-				powerpath:             test.fields.powerpath,
-				scsi:                  test.fields.scsi,
+				multipath:             fields.multipath,
+				powerpath:             fields.powerpath,
+				scsi:                  fields.scsi,
 				multipathFlushRetries: 1,
 			}
 
-			test.stateSetter(test.fields)
+			test.stateSetter(fields)
 
 			err := bc.cleanNVMeDevices(test.args.ctx, test.args.Force, test.args.Devices, test.args.WWN)
 
@@ -1024,9 +1294,6 @@ func TestCleanNVMeDevices(t *testing.T) {
 }
 
 func TestCleanDevices(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	type args struct {
 		ctx     context.Context
 		Force   bool
@@ -1035,11 +1302,11 @@ func TestCleanDevices(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		args        args
-		fields      BaseConnectorFields
-		stateSetter func(fields BaseConnectorFields)
-		expectedErr bool
+		name         string
+		args         args
+		stateSetter  func(fields BaseConnectorFields)
+		expectedErr  bool
+		flushRetries int
 	}{
 		{
 			name: "Failed to flush multipath device",
@@ -1049,7 +1316,6 @@ func TestCleanDevices(t *testing.T) {
 				Devices: []string{},
 				WWN:     "test-wwn",
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
 			},
@@ -1063,7 +1329,6 @@ func TestCleanDevices(t *testing.T) {
 				Devices: []string{},
 				WWN:     "",
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("failed to GetDMDeviceByChildren")).AnyTimes()
 				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
@@ -1071,18 +1336,149 @@ func TestCleanDevices(t *testing.T) {
 			},
 			expectedErr: false,
 		},
+		{
+			name:         "Force cleanup on multipath flush error",
+			flushRetries: 0,
+			args: args{
+				ctx:     context.Background(),
+				Force:   true,
+				Devices: []string{"sdb"},
+				WWN:     "test-wwn",
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+			},
+			expectedErr: false,
+		},
+		{
+			name:         "Force cleanup on delete SCSI device error",
+			flushRetries: 0,
+			args: args{
+				ctx:     context.Background(),
+				Force:   true,
+				Devices: []string{"sdb"},
+				WWN:     "test-wwn",
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "sdb").Return(errors.New("delete error")).AnyTimes()
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+			},
+			expectedErr: false,
+		},
+		{
+			name: "empty devices",
+			args: args{
+				ctx:     context.Background(),
+				Force:   false,
+				Devices: []string{},
+				WWN:     "test-wwn",
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+			},
+			expectedErr: true,
+		},
+		{
+			name:         "Powerpath daemon running",
+			flushRetries: 1,
+			args: args{
+				ctx:     context.Background(),
+				Force:   false,
+				Devices: []string{"sdb"},
+				WWN:     "test-wwn",
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "sdb").Return(nil).AnyTimes()
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				fields.powerpath.EXPECT().FlushDevice(gomock.Any()).Return(nil).AnyTimes()
+			},
+			expectedErr: false,
+		},
+		{
+			name:         "DM device found",
+			flushRetries: 1,
+			args: args{
+				ctx:     context.Background(),
+				Force:   false,
+				Devices: []string{"sdb"},
+				WWN:     "test-wwn",
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "sdb").Return(nil).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+			},
+			expectedErr: false,
+		},
+		{
+			name:         "DelPath error",
+			flushRetries: 0,
+			args: args{
+				ctx:     context.Background(),
+				Force:   true,
+				Devices: []string{"sdb"},
+				WWN:     "test-wwn",
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "sdb").Return(nil).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(errors.New("delpath error")).AnyTimes()
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+			},
+			expectedErr: false,
+		},
+		{
+			name:         "GetDMDeviceByChildren error with force",
+			flushRetries: 0,
+			args: args{
+				ctx:     context.Background(),
+				Force:   true,
+				Devices: []string{"sdb"},
+				WWN:     "test-wwn",
+			},
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("dm error")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "sdb").Return(nil).AnyTimes()
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+			},
+			expectedErr: false,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
 			bc := &baseConnector{
-				multipath:             test.fields.multipath,
-				powerpath:             test.fields.powerpath,
-				scsi:                  test.fields.scsi,
-				multipathFlushRetries: 0,
+				multipath:                  fields.multipath,
+				powerpath:                  fields.powerpath,
+				scsi:                       fields.scsi,
+				multipathFlushRetries:      test.flushRetries,
+				multipathFlushTimeout:      time.Second * 10,
+				multipathFlushRetryTimeout: time.Second * 5,
 			}
 
-			test.stateSetter(test.fields)
+			test.stateSetter(fields)
 
 			err := bc.cleanDevices(test.args.ctx, test.args.Force, test.args.Devices, test.args.WWN)
 
@@ -1095,9 +1491,6 @@ func TestCleanDevices(t *testing.T) {
 }
 
 func TestGetNVMEDMWWN(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	type args struct {
 		ctx        context.Context
 		DeviceName string
@@ -1106,7 +1499,6 @@ func TestGetNVMEDMWWN(t *testing.T) {
 	tests := []struct {
 		name        string
 		args        args
-		fields      BaseConnectorFields
 		stateSetter func(fields BaseConnectorFields)
 		expectedWWN string
 		expectedErr bool
@@ -1117,7 +1509,6 @@ func TestGetNVMEDMWWN(t *testing.T) {
 				ctx:        context.Background(),
 				DeviceName: "non-existent-device",
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
 
@@ -1132,7 +1523,6 @@ func TestGetNVMEDMWWN(t *testing.T) {
 				ctx:        context.Background(),
 				DeviceName: "non-existent-device",
 			},
-			fields: getTestBaseConnector(ctrl),
 			stateSetter: func(fields BaseConnectorFields) {
 				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("failed to get children for DM")).AnyTimes()
 
@@ -1145,13 +1535,16 @@ func TestGetNVMEDMWWN(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
 			bc := &baseConnector{
-				multipath: test.fields.multipath,
-				powerpath: test.fields.powerpath,
-				scsi:      test.fields.scsi,
+				multipath: fields.multipath,
+				powerpath: fields.powerpath,
+				scsi:      fields.scsi,
 			}
 
-			test.stateSetter(test.fields)
+			test.stateSetter(fields)
 
 			wwn, err := bc.getNVMEDMWWN(test.args.ctx, test.args.DeviceName)
 
@@ -1271,5 +1664,630 @@ func TestIdentifyDevicesForWWN(t *testing.T) {
 				t.Errorf("identifyDevicesForWWN() got = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBaseConnector_getDMWWN(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		stateSetter func(fields BaseConnectorFields)
+		dm          string
+		wantErr     bool
+	}{
+		{
+			name: "GetDMChildren error",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, errors.New("get children error")).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", errors.New("get wwid error")).AnyTimes()
+			},
+			dm:      "dm-0",
+			wantErr: true,
+		},
+		{
+			name: "GetDeviceWWN error",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{"sdb"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return("", errors.New("wwn error")).AnyTimes()
+			},
+			dm:      "dm-0",
+			wantErr: true,
+		},
+		{
+			name: "success",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{"sdb"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return("test-wwn", nil).AnyTimes()
+			},
+			dm:      "dm-0",
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
+			bc := &baseConnector{
+				multipath:             fields.multipath,
+				powerpath:             fields.powerpath,
+				scsi:                  fields.scsi,
+				multipathFlushRetries: 0,
+			}
+			tt.stateSetter(fields)
+			_, err := bc.getDMWWN(ctx, tt.dm)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getDMWWN() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBaseConnector_retryFlushMultipathDevice(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		stateSetter func(fields BaseConnectorFields)
+		dm          string
+		wantErr     bool
+	}{
+		{
+			name: "FlushDevice error",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+			},
+			dm:      "dm-0",
+			wantErr: true,
+		},
+		{
+			name: "device no longer exists",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+			},
+			dm:      "dm-0",
+			wantErr: false,
+		},
+		{
+			name: "success",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+			},
+			dm:      "dm-0",
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
+			bc := &baseConnector{
+				multipath:                  fields.multipath,
+				powerpath:                  fields.powerpath,
+				scsi:                       fields.scsi,
+				multipathFlushRetries:      0,
+				multipathFlushRetryTimeout: time.Second * 5,
+			}
+			tt.stateSetter(fields)
+			err := bc.retryFlushMultipathDevice(ctx, tt.dm)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("retryFlushMultipathDevice() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBaseConnector_cleanMultipathDevice(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		stateSetter func(fields BaseConnectorFields)
+		dm          string
+		wwid        string
+		wantErr     bool
+	}{
+		{
+			name: "retry flush error",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+			},
+			dm:      "dm-0",
+			wwid:    "",
+			wantErr: true,
+		},
+		{
+			name: "empty wwid - get DMWWID success",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			dm:      "dm-0",
+			wwid:    "",
+			wantErr: false,
+		},
+		{
+			name: "success",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			dm:      "dm-0",
+			wwid:    "test-wwid",
+			wantErr: false,
+		},
+		{
+			name: "RemoveDeviceFromWWIDSFile error",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(errors.New("remove error")).AnyTimes()
+			},
+			dm:      "dm-0",
+			wwid:    "test-wwid",
+			wantErr: false,
+		},
+		{
+			name: "GetDMWWID error",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("", errors.New("get wwid error")).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			dm:      "dm-0",
+			wwid:    "",
+			wantErr: false,
+		},
+		{
+			name: "device no longer exists during retry",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			dm:      "dm-0",
+			wwid:    "",
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
+			bc := &baseConnector{
+				multipath:                  fields.multipath,
+				powerpath:                  fields.powerpath,
+				scsi:                       fields.scsi,
+				multipathFlushRetries:      1,
+				multipathFlushTimeout:      time.Second * 10,
+				multipathFlushRetryTimeout: time.Second * 5,
+			}
+			tt.stateSetter(fields)
+			err := bc.cleanMultipathDevice(ctx, tt.dm, tt.wwid)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("cleanMultipathDevice() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBaseConnector_disconnectNVMEDevicesByDeviceName(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		stateSetter func(fields BaseConnectorFields)
+		deviceName  string
+		wantErr     bool
+	}{
+		{
+			name: "device not found",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+			},
+			deviceName: "nvme0n1",
+			wantErr:    false,
+		},
+		{
+			name: "device mapper - getNVMEDMWWN error",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{"nvme0n1"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), gomock.Any()).Return("", errors.New("wwn error")).AnyTimes()
+			},
+			deviceName: "dm-0",
+			wantErr:    true,
+		},
+		{
+			name: "device mapper - success",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{"nvme0n1"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), gomock.Any()).Return("test-wwn", nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{"nvme0n1"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			deviceName: "dm-0",
+			wantErr:    false,
+		},
+		{
+			name: "non-device mapper - GetNVMEDeviceWWN error",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), []string{"nvme0n1"}).Return("", errors.New("wwn error")).AnyTimes()
+			},
+			deviceName: "nvme0n1",
+			wantErr:    true,
+		},
+		{
+			name: "non-device mapper - success",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetNVMEDeviceWWN(gomock.Any(), []string{"nvme0n1"}).Return("test-wwn", nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{"nvme0n1"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			deviceName: "nvme0n1",
+			wantErr:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
+			bc := &baseConnector{
+				multipath:             fields.multipath,
+				powerpath:             fields.powerpath,
+				scsi:                  fields.scsi,
+				multipathFlushRetries: 1,
+			}
+			tt.stateSetter(fields)
+			err := bc.disconnectNVMEDevicesByDeviceName(ctx, tt.deviceName)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("disconnectNVMEDevicesByDeviceName() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBaseConnector_cleanNVMeDevices(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		stateSetter func(fields BaseConnectorFields)
+		devices     []string
+		wwn         string
+		force       bool
+		wantErr     bool
+	}{
+		{
+			name: "GetDMDeviceByChildren error",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"nvme0n1"}).Return("", errors.New("dm error")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "nvme0n1").Return(nil).AnyTimes()
+			},
+			devices: []string{"/dev/nvme0n1"},
+			wwn:     "test-wwn",
+			force:   false,
+			wantErr: false,
+		},
+		{
+			name: "cleanMultipathDevice error - force false",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"nvme0n1"}).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+			},
+			devices: []string{"/dev/nvme0n1"},
+			wwn:     "test-wwn",
+			force:   false,
+			wantErr: true,
+		},
+		{
+			name: "cleanMultipathDevice error - force true",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"nvme0n1"}).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "nvme0n1").Return(nil).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			devices: []string{"/dev/nvme0n1"},
+			wwn:     "test-wwn",
+			force:   true,
+			wantErr: false,
+		},
+		{
+			name: "success",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"nvme0n1"}).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "nvme0n1").Return(nil).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			devices: []string{"/dev/nvme0n1"},
+			wwn:     "test-wwn",
+			force:   false,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
+			bc := &baseConnector{
+				multipath:                  fields.multipath,
+				powerpath:                  fields.powerpath,
+				scsi:                       fields.scsi,
+				multipathFlushRetries:      1,
+				multipathFlushTimeout:      time.Second * 10,
+				multipathFlushRetryTimeout: time.Second * 5,
+			}
+			tt.stateSetter(fields)
+			err := bc.cleanNVMeDevices(ctx, tt.force, tt.devices, tt.wwn)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("cleanNVMeDevices() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBaseConnector_identifyDevicesForWWN(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		stateSetter func(fields BaseConnectorFields)
+		wwn         string
+		wantErr     bool
+	}{
+		{
+			name: "GetMultipathNameAndPaths error",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("", nil, errors.New("multipath error")).AnyTimes()
+			},
+			wwn:     "test-wwn",
+			wantErr: true,
+		},
+		{
+			name: "orphan device",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("orphan-device", []string{"sda"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"sda"}).Return("dm-0", nil).AnyTimes()
+			},
+			wwn:     "test-wwn",
+			wantErr: false,
+		},
+		{
+			name: "GetDMDeviceByChildren error - not dm not found",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("mpath0", []string{"sda"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"sda"}).Return("", errors.New("dm error")).AnyTimes()
+			},
+			wwn:     "test-wwn",
+			wantErr: true,
+		},
+		{
+			name: "dm not found",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("mpath0", []string{"sda"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"sda"}).Return("", errors.New(scsi.DmNotFoundErr)).AnyTimes()
+			},
+			wwn:     "test-wwn",
+			wantErr: false,
+		},
+		{
+			name: "success",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.multipath.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("mpath0", []string{"sda"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"sda"}).Return("dm-0", nil).AnyTimes()
+			},
+			wwn:     "test-wwn",
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
+			bc := &baseConnector{
+				multipath: fields.multipath,
+				powerpath: fields.powerpath,
+				scsi:      fields.scsi,
+			}
+			tt.stateSetter(fields)
+			_, err := bc.identifyDevicesForWWN(ctx, tt.wwn)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("identifyDevicesForWWN() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBaseConnector_cleanDevices(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		stateSetter func(fields BaseConnectorFields)
+		devices     []string
+		wwn         string
+		force       bool
+		wantErr     bool
+	}{
+		{
+			name: "GetDMDeviceByChildren error",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"sda"}).Return("", errors.New("dm error")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "sda").Return(nil).AnyTimes()
+			},
+			devices: []string{"sda"},
+			wwn:     "test-wwn",
+			force:   false,
+			wantErr: false,
+		},
+		{
+			name: "cleanMultipathDevice error - force false",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"sda"}).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+			},
+			devices: []string{"sda"},
+			wwn:     "test-wwn",
+			force:   false,
+			wantErr: true,
+		},
+		{
+			name: "cleanMultipathDevice error - force true",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"sda"}).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(errors.New("flush error")).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "sda").Return(nil).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			devices: []string{"sda"},
+			wwn:     "test-wwn",
+			force:   true,
+			wantErr: false,
+		},
+		{
+			name: "DeleteSCSIDeviceByName error - force false",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"sda"}).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "sda").Return(errors.New("delete error")).AnyTimes()
+			},
+			devices: []string{"sda"},
+			wwn:     "test-wwn",
+			force:   false,
+			wantErr: true,
+		},
+		{
+			name: "powerpath daemon running",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"sda"}).Return("", errors.New("dm not found")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "sda").Return(nil).AnyTimes()
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				fields.powerpath.EXPECT().FlushDevice(gomock.Any()).Return(nil).AnyTimes()
+			},
+			devices: []string{"sda"},
+			wwn:     "test-wwn",
+			force:   false,
+			wantErr: false,
+		},
+		{
+			name: "success",
+			stateSetter: func(fields BaseConnectorFields) {
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), []string{"sda"}).Return("dm-0", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("test-wwid", nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "sda").Return(nil).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+			},
+			devices: []string{"sda"},
+			wwn:     "test-wwn",
+			force:   false,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			fields := getTestBaseConnector(ctrl)
+			bc := &baseConnector{
+				multipath:                  fields.multipath,
+				powerpath:                  fields.powerpath,
+				scsi:                       fields.scsi,
+				multipathFlushRetries:      1,
+				multipathFlushTimeout:      time.Second * 10,
+				multipathFlushRetryTimeout: time.Second * 5,
+			}
+			tt.stateSetter(fields)
+			err := bc.cleanDevices(ctx, tt.force, tt.devices, tt.wwn)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("cleanDevices() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCleanDevices_PowerpathFlushError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mp := intmultipath.NewMockMultipath(ctrl)
+	pp := intpowerpath.NewMockPowerpath(ctrl)
+	s := intscsi.NewMockSCSI(ctrl)
+
+	bc := &baseConnector{
+		multipath: mp,
+		powerpath: pp,
+		scsi:      s,
+	}
+
+	s.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("dm not found"))
+	pp.EXPECT().IsDaemonRunning(gomock.Any()).Return(true)
+	pp.EXPECT().FlushDevice(gomock.Any()).Return(errors.New("powerpath flush error"))
+
+	err := bc.cleanDevices(context.Background(), false, []string{}, "test-wwn")
+	if err == nil {
+		t.Error("expected error from powerpath flush, got nil")
 	}
 }

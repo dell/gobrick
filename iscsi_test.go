@@ -1,5 +1,5 @@
 /*
-Copyright © 2020-2025 Dell Inc. or its subsidiaries. All Rights Reserved.
+Copyright © 2020-2026 Dell Inc. or its subsidiaries. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -117,6 +117,7 @@ func getDefaultISCSIFields(ctrl *gomock.Controller) iscsiFields {
 	mpMock := intmultipath.NewMockMultipath(ctrl)
 	scsiMock := intscsi.NewMockSCSI(ctrl)
 	ppath := powerpath.NewMockPowerpath(ctrl)
+	ppath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
 	bc.multipath = mpMock
 	bc.scsi = scsiMock
 	return iscsiFields{
@@ -474,6 +475,16 @@ func TestISCSIConnector_GetInitiatorName(t *testing.T) {
 			want:    []string{validISCSIInitiatorName},
 			wantErr: false,
 		},
+		{
+			name:   "error getting initiators",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				mock.ISCSILibGetInitiatorsErr(fields.iscsiLib)
+			},
+			args:    defaultArgs,
+			want:    nil,
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -575,6 +586,202 @@ func TestISCSIConnector_DisconnectVolume(t *testing.T) {
 			args:    defaultArgs,
 			wantErr: false,
 		},
+		{
+			name:   "error getting sessions",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				mock.ISCSILibGetSessionsErr(fields.iscsiLib)
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "error cleaning device",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				mock.ISCSILibGetSessionsOKReturn = validLibISCSISessions
+				mock.ISCSILibGetSessionsOK(fields.iscsiLib).Times(2)
+
+				sessionPtrn := "/sys/class/iscsi_host/host*/device/session%s"
+				targetPtrn := sessionPtrn + "/target*"
+				targetMatchPtrn := "/sys/class/iscsi_host/host%s/device/session%s/target%s:%s:%s"
+
+				mock.FilePathGlobCallPattern = fmt.Sprintf(targetPtrn, validLibISCSISession1.SID)
+				mock.FilePathGlobOKReturn = []string{fmt.Sprintf(
+					targetMatchPtrn,
+					validHCTL1.Host,
+					validLibISCSISession1.SID,
+					validHCTL1.Host,
+					validHCTL1.Channel,
+					validHCTL1.Target)}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.FilePathGlobCallPattern = fmt.Sprintf(targetPtrn, validLibISCSISession2.SID)
+				mock.FilePathGlobOKReturn = []string{fmt.Sprintf(
+					targetMatchPtrn,
+					validHCTL2.Host,
+					validLibISCSISession2.SID,
+					validHCTL2.Host,
+					validHCTL2.Channel,
+					validHCTL2.Target)}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1
+				mock.SCSIGetDeviceNameByHCTLOKReturn = mockhelper.ValidDeviceName
+				mock.SCSIGetDeviceNameByHCTLOK(fields.scsi)
+				mock.SCSIGetDeviceNameByHCTLOKReturn = mockhelper.ValidDeviceName2
+				mock.SCSIGetDeviceNameByHCTLCallH = validHCTL2
+				mock.SCSIGetDeviceNameByHCTLOK(fields.scsi)
+
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("dm error")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(errors.New("delete error"))
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "empty sessions",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				mock.ISCSILibGetSessionsOKReturn = []goiscsi.ISCSISession{}
+				mock.ISCSILibGetSessionsOK(fields.iscsiLib).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "error in findHCTLByISCSISessionID",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				mock.ISCSILibGetSessionsOKReturn = validLibISCSISessions
+				mock.ISCSILibGetSessionsOK(fields.iscsiLib).Times(2)
+
+				sessionPtrn := "/sys/class/iscsi_host/host*/device/session%s"
+				targetPtrn := sessionPtrn + "/target*"
+
+				mock.FilePathGlobCallPattern = fmt.Sprintf(targetPtrn, validLibISCSISession1.SID)
+				mock.FilePathGlobOKReturn = []string{}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.FilePathGlobCallPattern = fmt.Sprintf(targetPtrn, validLibISCSISession2.SID)
+				mock.FilePathGlobOKReturn = []string{}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.FilePathGlobCallPattern = fmt.Sprintf(sessionPtrn, validLibISCSISession1.SID)
+				mock.FilePathGlobOKReturn = []string{}
+				mock.FilePathGlobOK(fields.filePath)
+				mock.FilePathGlobCallPattern = fmt.Sprintf(sessionPtrn, validLibISCSISession2.SID)
+				mock.FilePathGlobOKReturn = []string{}
+				mock.FilePathGlobOK(fields.filePath)
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "GetDeviceNameByHCTL error",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				mock.ISCSILibGetSessionsOKReturn = validLibISCSISessions
+				mock.ISCSILibGetSessionsOK(fields.iscsiLib).Times(2)
+
+				sessionPtrn := "/sys/class/iscsi_host/host*/device/session%s"
+				targetPtrn := sessionPtrn + "/target*"
+				targetMatchPtrn := "/sys/class/iscsi_host/host%s/device/session%s/target%s:%s:%s"
+
+				mock.FilePathGlobCallPattern = fmt.Sprintf(targetPtrn, validLibISCSISession1.SID)
+				mock.FilePathGlobOKReturn = []string{fmt.Sprintf(
+					targetMatchPtrn,
+					validHCTL1.Host,
+					validLibISCSISession1.SID,
+					validHCTL1.Host,
+					validHCTL1.Channel,
+					validHCTL1.Target)}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.FilePathGlobCallPattern = fmt.Sprintf(targetPtrn, validLibISCSISession2.SID)
+				mock.FilePathGlobOKReturn = []string{fmt.Sprintf(
+					targetMatchPtrn,
+					validHCTL2.Host,
+					validLibISCSISession2.SID,
+					validHCTL2.Host,
+					validHCTL2.Channel,
+					validHCTL2.Target)}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1
+				mock.SCSIGetDeviceNameByHCTLOKReturn = ""
+				mock.SCSIGetDeviceNameByHCTLOK(fields.scsi)
+				mock.SCSIGetDeviceNameByHCTLCallH = validHCTL2
+				mock.SCSIGetDeviceNameByHCTLOK(fields.scsi)
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("no dm")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "error in GetDeviceNameByHCTL",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				mock.ISCSILibGetSessionsOKReturn = validLibISCSISessions
+				mock.ISCSILibGetSessionsOK(fields.iscsiLib).Times(2)
+
+				sessionPtrn := "/sys/class/iscsi_host/host*/device/session%s"
+				targetPtrn := sessionPtrn + "/target*"
+				targetMatchPtrn := "/sys/class/iscsi_host/host%s/device/session%s/target%s:%s:%s"
+
+				mock.FilePathGlobCallPattern = fmt.Sprintf(targetPtrn, validLibISCSISession1.SID)
+				mock.FilePathGlobOKReturn = []string{fmt.Sprintf(
+					targetMatchPtrn,
+					validHCTL1.Host,
+					validLibISCSISession1.SID,
+					validHCTL1.Host,
+					validHCTL1.Channel,
+					validHCTL1.Target)}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.FilePathGlobCallPattern = fmt.Sprintf(targetPtrn, validLibISCSISession2.SID)
+				mock.FilePathGlobOKReturn = []string{fmt.Sprintf(
+					targetMatchPtrn,
+					validHCTL2.Host,
+					validLibISCSISession2.SID,
+					validHCTL2.Host,
+					validHCTL2.Channel,
+					validHCTL2.Target)}
+				mock.FilePathGlobOK(fields.filePath)
+
+				mock.SCSIGetDeviceNameByHCTLCallH = validHCTL1
+				mock.SCSIGetDeviceNameByHCTLOKReturn = ""
+				mock.SCSIGetDeviceNameByHCTLOK(fields.scsi)
+				mock.SCSIGetDeviceNameByHCTLCallH = validHCTL2
+				mock.SCSIGetDeviceNameByHCTLOK(fields.scsi)
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("no dm")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "manual session management enabled",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.manualSessionManagement = true
+				mock.ISCSILibGetSessionsOKReturn = []goiscsi.ISCSISession{}
+				mock.ISCSILibGetSessionsOK(fields.iscsiLib).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:        "empty targets",
+			fields:      getDefaultISCSIFields(ctrl),
+			stateSetter: func(_ iscsiFields) {},
+			args: args{
+				ctx:  ctx,
+				info: ISCSIVolumeInfo{Targets: []ISCSITargetInfo{}},
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -596,6 +803,105 @@ func TestISCSIConnector_DisconnectVolume(t *testing.T) {
 			tt.stateSetter(tt.fields)
 			if err := c.DisconnectVolume(tt.args.ctx, tt.args.info); (err != nil) != tt.wantErr {
 				t.Errorf("DisconnectVolume() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestISCSI_readDevicesFromResultCH(t *testing.T) {
+	tests := []struct {
+		name     string
+		ch       chan string
+		result   []string
+		expected []string
+	}{
+		{
+			name:     "empty channel",
+			ch:       make(chan string),
+			result:   []string{},
+			expected: []string{},
+		},
+		{
+			name:     "channel with data",
+			ch:       func() chan string { ch := make(chan string, 2); ch <- "device1"; ch <- "device2"; return ch }(),
+			result:   []string{},
+			expected: []string{"device1", "device2"},
+		},
+		{
+			name:     "existing result",
+			ch:       func() chan string { ch := make(chan string, 1); ch <- "device3"; return ch }(),
+			result:   []string{"device1", "device2"},
+			expected: []string{"device1", "device2", "device3"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := readDevicesFromResultCH(tt.ch, tt.result)
+			if !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("readDevicesFromResultCH() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestISCSI_tryEnableManualISCSISessionMGMT(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      iscsiFields
+		stateSetter func(fields iscsiFields)
+		target      ISCSITargetInfo
+		wantErr     bool
+	}{
+		{
+			name: "manual session management disabled",
+			fields: func() iscsiFields {
+				f := getDefaultISCSIFields(ctrl)
+				f.manualSessionManagement = false
+				return f
+			}(),
+			stateSetter: func(_ iscsiFields) {},
+			target:      ISCSITargetInfo{Portal: "portal", Target: "target"},
+			wantErr:     false,
+		},
+		{
+			name:   "CreateOrUpdateNode error",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.manualSessionManagement = true
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(errors.New("other error")).AnyTimes()
+			},
+			target:  ISCSITargetInfo{Portal: "portal", Target: "target"},
+			wantErr: true,
+		},
+		{
+			name:   "success",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.manualSessionManagement = true
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			target:  ISCSITargetInfo{Portal: "portal", Target: "target"},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ISCSIConnector{
+				baseConnector:           tt.fields.baseConnector,
+				multipath:               tt.fields.multipath,
+				powerpath:               tt.fields.powerpath,
+				scsi:                    tt.fields.scsi,
+				iscsiLib:                tt.fields.iscsiLib,
+				manualSessionManagement: tt.fields.manualSessionManagement,
+			}
+			tt.stateSetter(tt.fields)
+			err := c.tryEnableManualISCSISessionMGMT(ctx, tt.target)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("tryEnableManualISCSISessionMGMT() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -659,6 +965,65 @@ func TestISCSIConnector_DisconnectVolumeByDeviceName(t *testing.T) {
 			args:    defaultArgs,
 			wantErr: false,
 		},
+		{
+			name:   "device does not exist",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "successful disconnection with children",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{"sda", "sdb"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return(mockhelper.ValidWWID, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{"sda", "sdb"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("no dm")).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return(mockhelper.ValidWWID, nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().DelPath(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "empty children",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return(mockhelper.ValidWWID, nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return(mockhelper.ValidWWID, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return(mockhelper.ValidWWID, nil).AnyTimes()
+				fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "GetDMDeviceByChildren error",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+				fields.scsi.EXPECT().GetDMChildren(gomock.Any(), gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return(mockhelper.ValidWWID, nil).AnyTimes()
+				fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return(mockhelper.ValidWWID, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{"sda"}, nil).AnyTimes()
+				fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("", errors.New("dm error")).AnyTimes()
+				fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -716,6 +1081,28 @@ func TestISCSIConnector_connectPowerpathDevice(t *testing.T) {
 			stateSetter: func(_ iscsiFields) {},
 			args:        emptyTargetArgs,
 			wantErr:     true,
+		},
+		{
+			name:   "Powerpath daemon not running",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+			},
+			args:    emptyTargetArgs,
+			wantErr: true,
+		},
+		{
+			name:   "Powerpath daemon running, no sessions",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+			},
+			args: args{
+				ctx:      ctx,
+				sessions: []goiscsi.ISCSISession{},
+				info:     validISCSIVolumeInfo,
+			},
+			wantErr: true,
 		},
 	}
 
@@ -809,6 +1196,266 @@ func TestISCSIConnector_tryEnableManualISCSISessionMGMT(t *testing.T) {
 			tt.stateSetter(tt.fields)
 			if err := c.tryEnableManualISCSISessionMGMT(tt.args.ctx, tt.args.target); (err != nil) != tt.wantErr {
 				t.Errorf("tryEnableManualISCSISessionMGMT() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestISCSIConnector_tryISCSILogin(t *testing.T) {
+	type args struct {
+		ctx     context.Context
+		targets []ISCSITargetInfo
+		force   bool
+	}
+
+	ctx := context.Background()
+	targets := []ISCSITargetInfo{
+		{Portal: validISCSIPortal1, Target: validISCSITarget1},
+	}
+	defaultArgs := args{ctx: ctx, targets: targets, force: false}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      iscsiFields
+		stateSetter func(fields iscsiFields)
+		args        args
+		wantErr     bool
+	}{
+		{
+			name:   "successful login",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().PerformLogin(gomock.Any()).Return(nil).AnyTimes()
+				fields.iscsiLib.EXPECT().GetSessions().Return([]goiscsi.ISCSISession{validLibISCSISession1}, nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "login failed",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().PerformLogin(gomock.Any()).Return(errors.New("login failed")).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:        "empty targets",
+			fields:      getDefaultISCSIFields(ctrl),
+			stateSetter: func(_ iscsiFields) {},
+			args: args{
+				ctx:     ctx,
+				targets: []ISCSITargetInfo{},
+				force:   false,
+			},
+			wantErr: false,
+		},
+		{
+			name:   "force login",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().PerformLogin(gomock.Any()).Return(nil).AnyTimes()
+				fields.iscsiLib.EXPECT().GetSessions().Return([]goiscsi.ISCSISession{validLibISCSISession1}, nil).AnyTimes()
+			},
+			args: args{
+				ctx:     ctx,
+				targets: targets,
+				force:   true,
+			},
+			wantErr: false,
+		},
+		{
+			name:   "GetSessions error",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().PerformLogin(gomock.Any()).Return(nil).AnyTimes()
+				fields.iscsiLib.EXPECT().GetSessions().Return(nil, errors.New("get sessions error")).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "manual session management enabled",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.manualSessionManagement = true
+				fields.iscsiLib.EXPECT().PerformLogin(gomock.Any()).Return(nil).AnyTimes()
+				fields.iscsiLib.EXPECT().GetSessions().Return([]goiscsi.ISCSISession{validLibISCSISession1}, nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ISCSIConnector{
+				baseConnector:                          tt.fields.baseConnector,
+				multipath:                              tt.fields.multipath,
+				powerpath:                              tt.fields.powerpath,
+				scsi:                                   tt.fields.scsi,
+				iscsiLib:                               tt.fields.iscsiLib,
+				manualSessionManagement:                tt.fields.manualSessionManagement,
+				waitDeviceTimeout:                      tt.fields.waitDeviceTimeout,
+				waitDeviceRegisterTimeout:              tt.fields.waitDeviceRegisterTimeout,
+				failedSessionMinimumLoginRetryInterval: tt.fields.failedSessionMinimumLoginRetryInterval,
+				loginLock:                              tt.fields.loginLock,
+				limiter:                                tt.fields.limiter,
+				singleCall:                             tt.fields.singleCall,
+				filePath:                               tt.fields.filePath,
+			}
+			tt.stateSetter(tt.fields)
+			_, err := c.tryISCSILogin(tt.args.ctx, tt.args.targets, tt.args.force)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("tryISCSILogin() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestISCSIConnector_checkISCSISessions(t *testing.T) {
+	type args struct {
+		ctx  context.Context
+		info ISCSIVolumeInfo
+	}
+
+	ctx := context.Background()
+	info := ISCSIVolumeInfo{
+		Targets: []ISCSITargetInfo{
+			{Portal: validISCSIPortal1, Target: validISCSITarget1},
+		},
+	}
+	defaultArgs := args{ctx: ctx, info: info}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      iscsiFields
+		stateSetter func(fields iscsiFields)
+		args        args
+		wantErr     bool
+	}{
+		{
+			name:   "CHAP enabled, session found",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.iscsiLib.EXPECT().GetSessions().Return([]goiscsi.ISCSISession{validLibISCSISession1}, nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: false,
+		},
+		{
+			name:   "CHAP disabled, session found",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.iscsiLib.EXPECT().GetSessions().Return([]goiscsi.ISCSISession{validLibISCSISession1}, nil).AnyTimes()
+			},
+			args: args{
+				ctx: ctx,
+				info: ISCSIVolumeInfo{
+					Targets: []ISCSITargetInfo{
+						{Portal: validISCSIPortal1, Target: validISCSITarget1},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:        "empty targets",
+			fields:      getDefaultISCSIFields(ctrl),
+			stateSetter: func(_ iscsiFields) {},
+			args: args{
+				ctx: ctx,
+				info: ISCSIVolumeInfo{
+					Targets: []ISCSITargetInfo{},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:   "CreateOrUpdateNode error",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(errors.New("node error")).AnyTimes()
+				fields.iscsiLib.EXPECT().GetSessions().Return([]goiscsi.ISCSISession{validLibISCSISession1}, nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "GetSessions error",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.iscsiLib.EXPECT().GetSessions().Return(nil, errors.New("sessions error")).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "session not found",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.iscsiLib.EXPECT().GetSessions().Return([]goiscsi.ISCSISession{}, nil).AnyTimes()
+				fields.iscsiLib.EXPECT().PerformLogin(gomock.Any()).Return(nil).AnyTimes()
+			},
+			args:    defaultArgs,
+			wantErr: true,
+		},
+		{
+			name:   "multiple targets",
+			fields: getDefaultISCSIFields(ctrl),
+			stateSetter: func(fields iscsiFields) {
+				fields.iscsiLib.EXPECT().CreateOrUpdateNode(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.iscsiLib.EXPECT().PerformLogin(gomock.Any()).Return(nil).AnyTimes()
+				fields.iscsiLib.EXPECT().GetSessions().Return([]goiscsi.ISCSISession{validLibISCSISession1, validLibISCSISession2}, nil).AnyTimes()
+			},
+			args: args{
+				ctx: ctx,
+				info: ISCSIVolumeInfo{
+					Targets: []ISCSITargetInfo{
+						{Portal: "192.168.1.10:3260", Target: "target1"},
+						{Portal: "192.168.1.20:3260", Target: "target2"},
+					},
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ISCSIConnector{
+				baseConnector:                          tt.fields.baseConnector,
+				multipath:                              tt.fields.multipath,
+				powerpath:                              tt.fields.powerpath,
+				scsi:                                   tt.fields.scsi,
+				iscsiLib:                               tt.fields.iscsiLib,
+				manualSessionManagement:                tt.fields.manualSessionManagement,
+				waitDeviceTimeout:                      tt.fields.waitDeviceTimeout,
+				waitDeviceRegisterTimeout:              tt.fields.waitDeviceRegisterTimeout,
+				failedSessionMinimumLoginRetryInterval: tt.fields.failedSessionMinimumLoginRetryInterval,
+				loginLock:                              tt.fields.loginLock,
+				limiter:                                tt.fields.limiter,
+				singleCall:                             tt.fields.singleCall,
+				filePath:                               tt.fields.filePath,
+				chapEnabled:                            true,
+				chapUser:                               "user",
+				chapPassword:                           "password",
+			}
+			tt.stateSetter(tt.fields)
+			_, err := c.checkISCSISessions(tt.args.ctx, tt.args.info)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("checkISCSISessions() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -1122,6 +1769,30 @@ func assertHCTLEqual(t *testing.T, got, want scsi.HCTL) {
 	}
 }
 
+func TestGetSessionByTargetInfoMatchesExpandedIPv6Portal(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	connector := NewISCSIConnector(ISCSIConnectorParams{})
+	iscsiLib := wrp.NewMockISCSILib(ctrl)
+	connector.iscsiLib = iscsiLib
+
+	target := ISCSITargetInfo{
+		Portal: "2607:f2b1:f1d0:76c::1a6",
+		Target: "iqn.2015-10.com.dell:dellemc-powerstore-gf8ypm3-a-6922c86f",
+	}
+	iscsiLib.EXPECT().GetSessions().Return([]goiscsi.ISCSISession{{
+		Portal:               "[2607:f2b1:f1d0:076c:0000:0000:0000:01a6]:3260",
+		Target:               target.Target,
+		ISCSISessionState:    goiscsi.ISCSISessionStateLOGGEDIN,
+		ISCSIConnectionState: goiscsi.ISCSIConnectionStateLOGGEDIN,
+	}}, nil)
+
+	_, found, err := connector.getSessionByTargetInfo(context.Background(), target)
+	assert.NoError(t, err)
+	assert.True(t, found)
+}
+
 func TestAddDefaultISCSIPortToVolumeInfoPortals(t *testing.T) {
 	// Test case 1: When the portal doesn't contain a port
 	t.Run("Portal without port", func(t *testing.T) {
@@ -1173,6 +1844,45 @@ func TestAddDefaultISCSIPortToVolumeInfoPortals(t *testing.T) {
 		addDefaultISCSIPortToVolumeInfoPortals(info)
 
 		assert.Len(t, info.Targets, 0) // Ensure the list is still empty
+	})
+
+	// Test case 5: Bare IPv6 portal without brackets
+	t.Run("Bare IPv6 portal without brackets", func(t *testing.T) {
+		info := &ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{
+				{Portal: "2607:f2b1:f1d0:76c::1a6", Target: "target1"},
+			},
+		}
+
+		addDefaultISCSIPortToVolumeInfoPortals(info)
+
+		assert.Equal(t, "[2607:f2b1:f1d0:76c::1a6]:3260", info.Targets[0].Portal)
+	})
+
+	// Test case 6: IPv6 portal with brackets and port
+	t.Run("IPv6 portal with brackets and port", func(t *testing.T) {
+		info := &ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{
+				{Portal: "[2607:f2b1:f1d0:76c::1a6]:3260", Target: "target1"},
+			},
+		}
+
+		addDefaultISCSIPortToVolumeInfoPortals(info)
+
+		assert.Equal(t, "[2607:f2b1:f1d0:76c::1a6]:3260", info.Targets[0].Portal)
+	})
+
+	// Test case 7: IPv6 portal with brackets but no port
+	t.Run("IPv6 portal with brackets but no port", func(t *testing.T) {
+		info := &ISCSIVolumeInfo{
+			Targets: []ISCSITargetInfo{
+				{Portal: "[2607:f2b1:f1d0:76c::1a6]", Target: "target1"},
+			},
+		}
+
+		addDefaultISCSIPortToVolumeInfoPortals(info)
+
+		assert.Equal(t, "[2607:f2b1:f1d0:76c::1a6]:3260", info.Targets[0].Portal)
 	})
 }
 
@@ -1252,6 +1962,97 @@ func TestISCSIConnector_cleanConnection(t *testing.T) {
 				Targets: []ISCSITargetInfo{
 					{Portal: "192.168.1.10:3260", Target: "target1"},
 					{Portal: "192.168.1.20:3260", Target: "target2"},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "force cleanup",
+			params: ISCSIConnectorParams{
+				Chroot: "/chroot",
+			},
+			force: true,
+			info: ISCSIVolumeInfo{
+				Targets: []ISCSITargetInfo{
+					{Portal: "192.168.1.10:3260", Target: "target1"},
+				},
+			},
+			wantErr: false,
+		},
+		/*
+			{
+				name: "no chroot",
+				params: ISCSIConnectorParams{
+					Chroot: "",
+				},
+				force: false,
+				info: ISCSIVolumeInfo{
+					Targets: []ISCSITargetInfo{
+						{Portal: "192.168.1.10:3260", Target: "target1"},
+					},
+				},
+				wantErr: false,
+			},
+		*/
+		{
+			name: "empty targets",
+			params: ISCSIConnectorParams{
+				Chroot: "/chroot",
+			},
+			force: false,
+			info: ISCSIVolumeInfo{
+				Targets: []ISCSITargetInfo{},
+			},
+			wantErr: false,
+		},
+		{
+			name: "manual session management enabled",
+			params: ISCSIConnectorParams{
+				Chroot: "/chroot",
+			},
+			force: false,
+			info: ISCSIVolumeInfo{
+				Targets: []ISCSITargetInfo{
+					{Portal: "192.168.1.10:3260", Target: "target1"},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "force cleanup with empty targets",
+			params: ISCSIConnectorParams{
+				Chroot: "/chroot",
+			},
+			force: true,
+			info: ISCSIVolumeInfo{
+				Targets: []ISCSITargetInfo{},
+			},
+			wantErr: false,
+		},
+		{
+			name: "force cleanup with no chroot",
+			params: ISCSIConnectorParams{
+				Chroot: "",
+			},
+			force: true,
+			info: ISCSIVolumeInfo{
+				Targets: []ISCSITargetInfo{
+					{Portal: "192.168.1.10:3260", Target: "target1"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "multiple targets",
+			params: ISCSIConnectorParams{
+				Chroot: "/chroot",
+			},
+			force: false,
+			info: ISCSIVolumeInfo{
+				Targets: []ISCSITargetInfo{
+					{Portal: "192.168.1.10:3260", Target: "target1"},
+					{Portal: "192.168.1.20:3260", Target: "target2"},
+					{Portal: "192.168.1.30:3260", Target: "target3"},
 				},
 			},
 			wantErr: true,

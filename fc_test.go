@@ -76,6 +76,7 @@ func getDefaultFCFields(ctrl *gomock.Controller) fcFields {
 	bc := con.baseConnector
 	mpMock := intmultipath.NewMockMultipath(ctrl)
 	ppMock := intpowerpath.NewMockPowerpath(ctrl)
+	ppMock.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
 	scsiMock := intscsi.NewMockSCSI(ctrl)
 	bc.multipath = mpMock
 	bc.scsi = scsiMock
@@ -391,6 +392,116 @@ func TestFCConnector_ConnectVolume(t *testing.T) {
 			want:    Device{},
 			wantErr: true,
 		},
+		{
+			name:   "empty devices by WWN",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				getFCHBASInfoMock(&mock, fields.os, fields.filePath)
+				waitForDeviceWWNMock(&mock, fields.filePath, fields.os, fields.scsi)
+				mock.SCSIGetDevicesByWWNCallWWN = mockhelper.ValidWWID
+				mock.SCSIGetDevicesByWWNOKReturn = []string{}
+				mock.SCSIGetDevicesByWWNOK(fields.scsi)
+				cleanConnectionMock(&mock, fields.filePath, fields.os, fields.scsi, fields.multipath)
+			},
+			args:    defaultArgs,
+			want:    Device{},
+			wantErr: true,
+		},
+		{
+			name: "GetDMDeviceByChildren error",
+			fields: func() fcFields {
+				f := getDefaultFCFields(ctrl)
+				f.waitDeviceRegisterTimeout = time.Second
+				return f
+			}(),
+			stateSetter: func(fields fcFields) {
+				getFCHBASInfoMock(&mock, fields.os, fields.filePath)
+				waitForDeviceWWNMock(&mock, fields.filePath, fields.os, fields.scsi)
+				mock.SCSIGetDevicesByWWNCallWWN = mockhelper.ValidWWID
+				mock.SCSIGetDevicesByWWNOKReturn = mockhelper.ValidDevices
+				mock.SCSIGetDevicesByWWNOK(fields.scsi)
+
+				mock.MultipathIsDaemonRunningOKReturn = true
+				mock.MultipathIsDaemonRunningOK(fields.multipath)
+
+				mock.MultipathAddWWIDCallWWID = mockhelper.ValidWWID
+				mock.MultipathAddWWIDOK(fields.multipath)
+
+				mock.MultipathAddPathCallPath = mockhelper.ValidDevicePath
+				mock.MultipathAddPathOK(fields.multipath)
+
+				mock.MultipathAddPathCallPath = mockhelper.ValidDevicePath2
+				mock.MultipathAddPathOK(fields.multipath)
+
+				mock.SCSIGetDMDeviceByChildrenCallDevices = mockhelper.ValidDevices
+				mock.SCSIGetDMDeviceByChildrenErr(fields.scsi)
+				cleanConnectionMock(&mock, fields.filePath, fields.os, fields.scsi, fields.multipath)
+			},
+			args:    defaultArgs,
+			want:    Device{},
+			wantErr: true,
+		},
+		{
+			name:   "Powerpath daemon running",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				getFCHBASInfoMock(&mock, fields.os, fields.filePath)
+				waitForDeviceWWNMock(&mock, fields.filePath, fields.os, fields.scsi)
+				mock.SCSIGetDevicesByWWNCallWWN = mockhelper.ValidWWID
+				mock.SCSIGetDevicesByWWNOKReturn = mockhelper.ValidDevices
+				mock.SCSIGetDevicesByWWNOK(fields.scsi)
+
+				fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+				fields.powerpath.EXPECT().FlushDevice(gomock.Any()).Return(nil).AnyTimes()
+				mock.MultipathIsDaemonRunningOKReturn = false
+				mock.MultipathIsDaemonRunningOK(fields.multipath)
+
+				mock.SCSIWaitUdevSymlinkCallWWN = mockhelper.ValidWWID
+				mock.SCSIWaitUdevSymlinkCallDevice = mockhelper.ValidDeviceName
+				mock.SCSIWaitUdevSymlinkOK(fields.scsi)
+
+				mock.SCSICheckDeviceIsValidOKReturn = true
+				mock.SCSICheckDeviceIsValidCallDevice = mockhelper.ValidDevicePath
+				mock.SCSICheckDeviceIsValidOK(fields.scsi)
+			},
+			args:    defaultArgs,
+			want:    validDevice,
+			wantErr: false,
+		},
+		{
+			name:   "multiple targets",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				getFCHBASInfoMock(&mock, fields.os, fields.filePath)
+				waitForDeviceWWNMock(&mock, fields.filePath, fields.os, fields.scsi)
+				mock.SCSIGetDevicesByWWNCallWWN = mockhelper.ValidWWID
+				mock.SCSIGetDevicesByWWNOKReturn = mockhelper.ValidDevices
+				mock.SCSIGetDevicesByWWNOK(fields.scsi)
+
+				mock.MultipathIsDaemonRunningOKReturn = false
+				mock.MultipathIsDaemonRunningOK(fields.multipath)
+
+				mock.SCSIWaitUdevSymlinkCallWWN = mockhelper.ValidWWID
+				mock.SCSIWaitUdevSymlinkCallDevice = mockhelper.ValidDeviceName
+				mock.SCSIWaitUdevSymlinkOK(fields.scsi)
+
+				mock.SCSICheckDeviceIsValidOKReturn = true
+				mock.SCSICheckDeviceIsValidCallDevice = mockhelper.ValidDevicePath
+				mock.SCSICheckDeviceIsValidOK(fields.scsi)
+			},
+			args: args{
+				ctx: ctx,
+				info: FCVolumeInfo{
+					Targets: []FCTargetInfo{
+						{WWPN: validWWPN1},
+						{WWPN: validWWPN2},
+					},
+					Lun: validLunNumber,
+				},
+			},
+			want:    validDevice,
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -412,6 +523,282 @@ func TestFCConnector_ConnectVolume(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ConnectVolume() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFCConnector_waitForDeviceWWN(t *testing.T) {
+	type args struct {
+		ctx  context.Context
+		hbas []FCHBA
+		info FCVolumeInfo
+	}
+
+	ctx := context.Background()
+	validHBA := FCHBA{HostDevice: "host0"}
+	info := FCVolumeInfo{
+		Targets: []FCTargetInfo{
+			{WWPN: validWWPN1},
+		},
+		Lun: validLunNumber,
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      fcFields
+		args        args
+		want        string
+		wantErr     bool
+		stateSetter func(fields fcFields)
+	}{
+		{
+			name:   "findHCTLsForFCHBA error",
+			fields: getDefaultFCFields(ctrl),
+			args: args{
+				ctx:  ctx,
+				hbas: []FCHBA{validHBA},
+				info: info,
+			},
+			want:    "",
+			wantErr: true,
+			stateSetter: func(fields fcFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return(nil, errors.New("glob error")).AnyTimes()
+			},
+		},
+		{
+			name:   "context canceled",
+			fields: getDefaultFCFields(ctrl),
+			args: args{
+				ctx: func() context.Context {
+					ctx, cancel := context.WithCancel(context.Background())
+					cancel()
+					return ctx
+				}(),
+				hbas: []FCHBA{validHBA},
+				info: info,
+			},
+			want:    "",
+			wantErr: true,
+			stateSetter: func(fields fcFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil).AnyTimes()
+			},
+		},
+		{
+			name:   "empty HBAs",
+			fields: getDefaultFCFields(ctrl),
+			args: args{
+				ctx: func() context.Context {
+					c, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+					_ = cancel
+					return c
+				}(),
+				hbas: []FCHBA{},
+				info: info,
+			},
+			want:        "",
+			wantErr:     true,
+			stateSetter: func(_ fcFields) {},
+		},
+		{
+			name:   "RescanSCSIHostByHCTL error",
+			fields: getDefaultFCFields(ctrl),
+			args: args{
+				ctx: func() context.Context {
+					c, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
+					_ = cancel
+					return c
+				}(),
+				hbas: []FCHBA{validHBA},
+				info: info,
+			},
+			want:    "",
+			wantErr: true,
+			stateSetter: func(fields fcFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().RescanSCSIHostByHCTL(gomock.Any(), gomock.Any()).Return(errors.New("rescan error")).AnyTimes()
+			},
+		},
+		{
+			name:   "GetDeviceWWN error",
+			fields: getDefaultFCFields(ctrl),
+			args: args{
+				ctx: func() context.Context {
+					c, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
+					_ = cancel
+					return c
+				}(),
+				hbas: []FCHBA{validHBA},
+				info: info,
+			},
+			want:    "",
+			wantErr: true,
+			stateSetter: func(fields fcFields) {
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil).AnyTimes()
+				fields.scsi.EXPECT().RescanSCSIHostByHCTL(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+				fields.scsi.EXPECT().GetDeviceWWN(gomock.Any(), gomock.Any()).Return("", errors.New("wwn error")).AnyTimes()
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fc := &FCConnector{
+				baseConnector: tt.fields.baseConnector,
+				multipath:     tt.fields.multipath,
+				powerpath:     tt.fields.powerpath,
+				scsi:          tt.fields.scsi,
+				filePath:      tt.fields.filePath,
+				os:            tt.fields.os,
+				limiter:       tt.fields.limiter,
+			}
+			tt.stateSetter(tt.fields)
+			got, err := fc.waitForDeviceWWN(tt.args.ctx, tt.args.hbas, tt.args.info)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("waitForDeviceWWN() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("waitForDeviceWWN() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFCConnector_getFCHBASInfo(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name        string
+		fields      fcFields
+		stateSetter func(fields fcFields)
+		wantErr     bool
+	}{
+		{
+			name:   "FC not supported",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat(gomock.Any()).Return(nil, errors.New("FC not supported")).AnyTimes()
+			},
+			wantErr: true,
+		},
+		{
+			name:   "Glob error",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat(gomock.Any()).Return(&fakeDirFileInfo{"fc_host"}, nil).AnyTimes()
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return(nil, errors.New("glob error")).AnyTimes()
+			},
+			wantErr: true,
+		},
+		{
+			name:   "ReadFile error",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat(gomock.Any()).Return(&fakeDirFileInfo{"fc_host"}, nil).AnyTimes()
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/fc_host/host0"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return(nil, errors.New("read error")).AnyTimes()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "invalid WWPN format",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat(gomock.Any()).Return(&fakeDirFileInfo{"fc_host"}, nil).AnyTimes()
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/fc_host/host0"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("invalid"), nil).AnyTimes()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "empty Glob result",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat(gomock.Any()).Return(&fakeDirFileInfo{"fc_host"}, nil).AnyTimes()
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{}, nil).AnyTimes()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "success with valid HBA info",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat(gomock.Any()).Return(&fakeDirFileInfo{"fc_host"}, nil).AnyTimes()
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/fc_host/host0"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("0x5001438022b00001"), nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("0x5001438022b00001"), nil).AnyTimes()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "WWPN without 0x prefix",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat(gomock.Any()).Return(&fakeDirFileInfo{"fc_host"}, nil).AnyTimes()
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/fc_host/host0"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("5001438022b00001"), nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("5001438022b00001"), nil).AnyTimes()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "multiple HBAs",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat(gomock.Any()).Return(&fakeDirFileInfo{"fc_host"}, nil).AnyTimes()
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/fc_host/host0", "/sys/class/fc_host/host1"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("0x5001438022b00001"), nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("0x5001438022b00002"), nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("0x5001438022b00001"), nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("0x5001438022b00002"), nil).AnyTimes()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "port_name error after node_name",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat(gomock.Any()).Return(&fakeDirFileInfo{"fc_host"}, nil).AnyTimes()
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/fc_host/host0", "/sys/class/fc_host/host1"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("0x5001438022b00001"), nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("0x5001438022b00002"), nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("0x5001438022b00001"), nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return(nil, errors.New("read error")).AnyTimes()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "node_name error on first HBA",
+			fields: getDefaultFCFields(ctrl),
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat(gomock.Any()).Return(&fakeDirFileInfo{"fc_host"}, nil).AnyTimes()
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"/sys/class/fc_host/host0"}, nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("0x5001438022b00001"), nil).AnyTimes()
+				fields.os.EXPECT().ReadFile(gomock.Any()).Return(nil, errors.New("read error")).AnyTimes()
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &FCConnector{
+				baseConnector: tt.fields.baseConnector,
+				scsi:          tt.fields.scsi,
+				multipath:     tt.fields.multipath,
+				powerpath:     tt.fields.powerpath,
+				os:            tt.fields.os,
+				filePath:      tt.fields.filePath,
+			}
+			tt.stateSetter(tt.fields)
+			_, err := c.getFCHBASInfo(ctx)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getFCHBASInfo() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -565,6 +952,17 @@ func TestFCConnector_GetInitiatorPorts(t *testing.T) {
 				getFCHBASInfoMock(&mock, fields.os, fields.filePath)
 			},
 			want:    []string{validWWPN1, validWWPN2},
+			wantErr: false,
+		},
+		{
+			name:   "error getting FC HBA info",
+			fields: getDefaultFCFields(ctrl),
+			args:   defaultArgs,
+			stateSetter: func(fields fcFields) {
+				fields.os.EXPECT().Stat("/sys/class/fc_host").Return(fakeDirFileInfo{"fc_host"}, nil)
+				fields.filePath.EXPECT().Glob(gomock.Any()).Return(nil, errors.New("glob error"))
+			},
+			want:    nil,
 			wantErr: false,
 		},
 	}
@@ -990,6 +1388,33 @@ func TestWaitMultipathDevice(t *testing.T) {
 			expectedError: "multipath device for WWN test-wwn not found",
 			expectedMpath: "",
 		},
+		{
+			name: "Failed to add path",
+			setupMocks: func() {
+				addWWIDFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, wwn string) error {
+					return func(_ context.Context, _ string) error {
+						return nil
+					}
+				}
+				addPathFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devPath string) error {
+					return func(_ context.Context, _ string) error {
+						return errors.New("failed to add path")
+					}
+				}
+				getDMDeviceByChildrenFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, devices []string) (string, error) {
+					return func(_ context.Context, _ []string) (string, error) {
+						return "dm-0", nil
+					}
+				}
+				waitUdevSymlinkFunc = func(_ context.Context, _ *FCConnector) func(ctx context.Context, device, wwn string) error {
+					return func(_ context.Context, _, _ string) error {
+						return nil
+					}
+				}
+			},
+			expectedError: "",
+			expectedMpath: "dm-0",
+		},
 	}
 
 	for _, tt := range testCases {
@@ -1036,6 +1461,17 @@ func TestFCConnector_waitSingleDevice(t *testing.T) {
 				ctx:     context.Background(),
 				wwn:     "wwn_test",
 				devices: []string{"device1", "device2"},
+			},
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name: "empty devices",
+			fc:   &FCConnector{},
+			args: args{
+				ctx:     context.Background(),
+				wwn:     "wwn_test",
+				devices: []string{},
 			},
 			want:    "",
 			wantErr: true,
@@ -1178,6 +1614,31 @@ func TestFCConnector_DisconnectVolumeByWWN_AcquireFails(t *testing.T) {
 	}
 }
 
+func TestFCConnector_DisconnectVolumeByWWN_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fields := getDefaultFCFields(ctrl)
+
+	// Mock the base connector's disconnectDevicesByWWN to return success
+	fields.scsi.EXPECT().GetDevicesByWWN(gomock.Any(), gomock.Any()).Return([]string{"sdb"}, nil)
+	fields.scsi.EXPECT().DeleteSCSIDeviceByName(gomock.Any(), "sdb").Return(nil)
+	fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false)
+
+	fc := &FCConnector{
+		baseConnector:             fields.baseConnector,
+		multipath:                 fields.multipath,
+		scsi:                      fields.scsi,
+		filePath:                  fields.filePath,
+		os:                        fields.os,
+		limiter:                   fields.limiter,
+		waitDeviceRegisterTimeout: fields.waitDeviceRegisterTimeout,
+	}
+
+	err := fc.DisconnectVolumeByWWN(context.Background(), mockhelper.ValidWWID)
+	assert.NoError(t, err)
+}
+
 func TestFCConnector_DisconnectVolumeByDeviceName_AcquireFails(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1249,6 +1710,49 @@ func TestFCConnector_cleanConnection_GetFCHBASInfoError(t *testing.T) {
 	}
 }
 
+func TestFCConnector_cleanConnection_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fields := getDefaultFCFields(ctrl)
+
+	volumeInfo := FCVolumeInfo{
+		Targets: []FCTargetInfo{{WWPN: "wwpn1"}},
+		Lun:     1,
+	}
+
+	fields.os.EXPECT().Stat("/sys/class/fc_host").Return(fakeDirFileInfo{"fc_host"}, nil).AnyTimes()
+	fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"host0"}, nil).AnyTimes()
+	fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("port-name\nnode-name\n"), nil).AnyTimes()
+	fields.filePath.EXPECT().Glob(gomock.Any()).Return([]string{"0:0:0:1"}, nil).AnyTimes()
+	fields.os.EXPECT().ReadFile(gomock.Any()).Return([]byte("0\n0\n0\n1\n"), nil).AnyTimes()
+	fields.scsi.EXPECT().GetDeviceNameByHCTL(gomock.Any(), gomock.Any()).Return("sda", nil).AnyTimes()
+	fields.multipath.EXPECT().GetMultipathNameAndPaths(gomock.Any(), gomock.Any()).Return("mpath0", []string{"sda"}, nil).AnyTimes()
+	fields.multipath.EXPECT().IsDaemonRunning(gomock.Any()).Return(true).AnyTimes()
+	fields.multipath.EXPECT().FlushDevice(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	fields.multipath.EXPECT().GetMpathMinorByMpathName(gomock.Any(), "mpath0").Return("minor", false, nil).AnyTimes()
+	fields.scsi.EXPECT().GetDMDeviceByChildren(gomock.Any(), gomock.Any()).Return("dm-0", nil).AnyTimes()
+	fields.scsi.EXPECT().IsDeviceExist(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+	fields.multipath.EXPECT().GetDMWWID(gomock.Any(), gomock.Any()).Return("wwid", nil).AnyTimes()
+	fields.multipath.EXPECT().RemoveDeviceFromWWIDSFile(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	fields.powerpath.EXPECT().IsDaemonRunning(gomock.Any()).Return(false).AnyTimes()
+
+	fc := &FCConnector{
+		baseConnector:             fields.baseConnector,
+		multipath:                 fields.multipath,
+		scsi:                      fields.scsi,
+		filePath:                  fields.filePath,
+		os:                        fields.os,
+		limiter:                   fields.limiter,
+		waitDeviceRegisterTimeout: fields.waitDeviceRegisterTimeout,
+	}
+
+	err := fc.cleanConnection(context.Background(), false, volumeInfo)
+	if err != nil {
+		t.Fatalf("cleanConnection() unexpected error: %v", err)
+	}
+}
+
 func stubWaitUdev(t *testing.T, fn func(context.Context, *FCConnector) func(context.Context, string, string) error) {
 	t.Helper()
 	orig := waitUdevSymlinkFunc
@@ -1297,6 +1801,28 @@ func Test_waitSingleDevice_CanceledContext(t *testing.T) {
 	}
 	if got != "" {
 		t.Fatalf("expected empty device on cancel, got %q", got)
+	}
+}
+
+func Test_waitSingleDevice_Timeout(t *testing.T) {
+	ctx := context.Background()
+	wwn := "wwn-123"
+	devices := []string{"sda", "sdb"}
+
+	stubWaitUdev(t, func(_ context.Context, _ *FCConnector) func(context.Context, string, string) error {
+		return func(_ context.Context, _ string, _ string) error {
+			return errors.New("not ready")
+		}
+	})
+
+	fc := &FCConnector{waitDeviceRegisterTimeout: 1 * time.Second}
+
+	got, err := fc.waitSingleDevice(ctx, wwn, devices)
+	if err == nil {
+		t.Fatalf("expected timeout error, got nil")
+	}
+	if got != "" {
+		t.Fatalf("expected empty device on timeout, got %q", got)
 	}
 }
 

@@ -19,7 +19,8 @@ package tracer
 
 import (
 	"context"
-	"fmt"
+
+	csmlog "github.com/dell/csmlog"
 )
 
 var tracer Tracer
@@ -50,8 +51,8 @@ func TraceFuncCall(ctx context.Context, funcName string) func() {
 type DummyTracer struct{}
 
 // Trace contains dummy implementation of trace function
-func (dl *DummyTracer) Trace(_ context.Context, format string, args ...interface{}) {
-	fmt.Printf(format+"\n", args...)
+func (dl *DummyTracer) Trace(ctx context.Context, format string, args ...interface{}) {
+	csmlog.WithContext(ctx).Debugf(format, args...)
 }
 
 // Trace contains implementation of trace function

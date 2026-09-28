@@ -29,7 +29,6 @@ import (
 	"github.com/dell/gobrick/internal/tracer"
 	wrp "github.com/dell/gobrick/internal/wrappers"
 	"github.com/dell/gobrick/pkg/gobrickutils"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -104,7 +103,7 @@ func (mp *Powerpath) getPowerPathDevices(ctx context.Context, devices []string) 
 		deviceName := fmt.Sprintf("dev=%s", dev)
 		out, err := mp.runCommand(ctx, powerpathDaemon, []string{"display", deviceName})
 		if err != nil {
-			log.Errorf("Error powermt display %s: %v", dev, err)
+			logger.Error(ctx, "Error powermt display %s: %v", dev, err)
 			return "", err
 		}
 		op := strings.Split(string(out), "\n")
@@ -120,7 +119,7 @@ func (mp *Powerpath) getPowerPathDevices(ctx context.Context, devices []string) 
 					if match == "" {
 						match = tokens[1]
 					} else if match != tokens[1] {
-						log.Debugf("wrong parent for: %s", tokens[1])
+						logger.Debug(ctx, "wrong parent for: %s", tokens[1])
 						return "", fmt.Errorf("wrong parent for: %s", tokens[1])
 					}
 				}

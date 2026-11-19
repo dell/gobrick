@@ -3,9 +3,9 @@ module github.com/dell/gobrick
 go 1.27
 
 require (
-	github.com/dell/csmlog v1.2.0
-	github.com/dell/goiscsi v1.16.0
-	github.com/dell/gonvme v1.15.0
+	github.com/dell/csmlog v1.2.1
+	github.com/dell/goiscsi v1.16.1
+	github.com/dell/gonvme v1.15.1
 	github.com/golang/mock v1.6.0
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/sync v0.23.0
